@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>关于 · frank</title>
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body data-page="about">
+  <header class="site-header"></header>
+
+  <main>
+    <section class="page-intro">
+      <div class="container">
+        <div class="crumb">About</div>
+        <h1>关于我</h1>
+        <p>简单介绍一下我自己，以及这个站点是怎么来的。</p>
+      </div>
+    </section>
+
+    <section class="block" style="padding-top:24px">
+      <div class="container about-grid">
+        <div class="card" style="cursor:default">
+          <h3>👋 你好</h3>
+          <p class="desc" style="-webkit-line-clamp:unset;font-size:15px;line-height:1.8">
+            我是 <strong>frank</strong>，<a href="https://www.nuc.edu.cn/" target="_blank" rel="noopener">中北大学</a>在读，主要方向是 Java 后端。喜欢动手把课程或博客里看到的东西复现出来，再整理成自己能看懂的笔记。
+          </p>
+          <p class="desc" style="-webkit-line-clamp:unset;font-size:15px;line-height:1.8">
+            日常技术栈集中在 <strong>Spring Boot / MyBatis-Plus / Redis / MySQL / RocketMQ</strong>，也在写 Python、玩 PyTorch 与微信小程序。
+          </p>
+        </div>
+        <div class="card" style="cursor:default">
+          <h3>🛠 技能 & 兴趣</h3>
+          <div class="skill-row" id="skills"></div>
+          <p class="desc" style="-webkit-line-clamp:unset;margin-top:16px;font-size:14px;color:var(--ink-soft)">
+            兴趣领域：分布式系统、缓存与消息中间件、AI 应用层（RAG、Spring AI），以及一切“看上去能用一行代码搞定”的小工具。
+          </p>
+        </div>
+
+        <div class="card" style="cursor:default;grid-column:span 2">
+          <h3>💡 关于这个网站</h3>
+          <p class="desc" style="-webkit-line-clamp:unset;font-size:15px;line-height:1.8">
+            这是一个纯静态站点，托管在 <a href="https://github.com/WaterDimension/WaterDimension.github.io" target="_blank" rel="noopener">WaterDimension.github.io</a>。
+            笔记直接由本地 HTML / Markdown 渲染：Markdown 走 marked + highlight.js + DOMPurify，HTML 用 iframe 保留导出工具的原始排版。
+            项目数据则手动整理自我的 GitHub 公开仓库。
+          </p>
+          <p class="desc" style="-webkit-line-clamp:unset;font-size:15px;line-height:1.8">
+            想到什么就写什么，慢慢长出来。
+          </p>
+        </div>
+
+        <div class="card" style="cursor:default;grid-column:span 2">
+          <h3>📮 联系方式</h3>
+          <ul style="margin:0;padding-left:20px;line-height:2;color:var(--ink-soft)">
+            <li>GitHub · <a href="https://github.com/WaterDimension" target="_blank" rel="noopener">@WaterDimension</a></li>
+            <li>学校 · <a href="https://www.nuc.edu.cn/" target="_blank" rel="noopener">中北大学（North University of China）</a></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer"></footer>
+
+  <script src="assets/main.js"></script>
+  <script>
+    (async function () {
+      const data = await loadJSON("data/site.json");
+      document.getElementById("skills").innerHTML = data.profile.skills
+        .map((s, i) => `<span class="tag${i < 4 ? " brand" : ""}">${escapeHtml(s)}</span>`).join("");
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,239 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpringBoot YAML配置文件全解析：语法+读取+高级用法</title>
+  <link rel="stylesheet" href="https://stackedit.io/style.css" />
+</head>
+
+<body class="stackedit">
+  <div class="stackedit__html"><h1><a id="SpringBoot_YAML_0"></a>SpringBoot YAML配置文件全解析：语法+读取+高级用法</h1>
+<blockquote>
+<p>本文针对SpringBoot开发中高频使用的YAML配置文件，从基础语法到数据读取全流程拆解，结合实战示例讲解，帮你彻底掌握YAML的核心用法。</p>
+</blockquote>
+<h2><a id="YAML_3"></a>一、YAML是什么？</h2>
+<p>YAML（YAML Ain’t Markup Language）是一种<strong>以数据为核心</strong>的序列化格式，相比传统的properties配置文件，更易读、更易与脚本语言交互，也是SpringBoot官方推荐的配置格式。</p>
+<h3><a id="_6"></a>常见文件扩展名</h3>
+<ul>
+<li><code>.yml</code>（主流，推荐使用）</li>
+<li><code>.yaml</code>（与yml等价，格式完全一致）</li>
+</ul>
+<h2><a id="YAML_10"></a>二、YAML核心语法规则（必记）</h2>
+<p>YAML有严格的格式要求，也是新手最容易踩坑的地方，核心规则如下：</p>
+<ol>
+<li><strong>大小写敏感</strong>：<code>name: Itcast</code> 和 <code>name: itcast</code> 是两个不同的值</li>
+<li><strong>层级关系</strong>：属性层级用多行描述，<strong>每行结尾必须加冒号</strong></li>
+<li><strong>缩进规则</strong>：用缩进表示层级，同层级左侧对齐，<strong>只允许空格（禁止Tab键）</strong></li>
+<li><strong>分隔规则</strong>：属性名与属性值之间必须用「冒号+空格」分隔（核心坑点）</li>
+<li><strong>注释规则</strong>：<code>#</code> 开头表示注释，注释内容不会被解析</li>
+</ol>
+<blockquote>
+<p>💡 提示：无需死记硬背，IDEA会提供语法提示，重点记住「冒号后必须加空格」即可。</p>
+</blockquote>
+<h2><a id="YAML_20"></a>三、YAML常见数据格式</h2>
+<h3><a id="31__21"></a>3.1 基础字面值（单值数据）</h3>
+<p>支持布尔、数字、字符串、日期等基础类型，书写格式如下：</p>
+<pre><code class="prism language-yaml"><span class="token comment"># 布尔类型（TRUE/true/True/FALSE/false/False均可）</span>
+<span class="token key atrule">boolean</span><span class="token punctuation">:</span> <span class="token boolean important">TRUE</span>
+<span class="token comment"># 浮点型（支持科学计数法）</span>
+<span class="token key atrule">float</span><span class="token punctuation">:</span> <span class="token number">3.14</span>
+<span class="token key atrule">float2</span><span class="token punctuation">:</span> <span class="token number">6.8523015e+5</span>
+<span class="token comment"># 整型（支持二进制、八进制、十六进制）</span>
+<span class="token key atrule">int</span><span class="token punctuation">:</span> <span class="token number">123</span>
+<span class="token key atrule">int2</span><span class="token punctuation">:</span> 0b1010_0111_0100_1010_1110
+<span class="token comment"># 空值（~表示null）</span>
+<span class="token key atrule">null</span><span class="token punctuation">:</span> <span class="token null important">~</span>
+<span class="token comment"># 字符串（直接书写或双引号包裹）</span>
+<span class="token key atrule">string</span><span class="token punctuation">:</span> HelloWorld
+<span class="token key atrule">string2</span><span class="token punctuation">:</span> <span class="token string">"Hello World"</span>  <span class="token comment"># 双引号可包裹特殊字符</span>
+<span class="token comment"># 日期（必须yyyy-MM-dd格式）</span>
+<span class="token key atrule">date</span><span class="token punctuation">:</span> <span class="token datetime number">2018-02-17</span>
+<span class="token comment"># 日期时间（T分隔时间，+指定时区）</span>
+<span class="token key atrule">datetime</span><span class="token punctuation">:</span> <span class="token datetime number">2018-02-17T15:02:31+08:00</span>
+</code></pre>
+<h3><a id="32__43"></a>3.2 数组/集合格式</h3>
+<p>数组以「减号+空格」开头，每行一个元素，也支持缩略写法：</p>
+<pre><code class="prism language-yaml"><span class="token comment"># 基础数组</span>
+<span class="token key atrule">subject</span><span class="token punctuation">:</span>
+  <span class="token punctuation">-</span> Java
+  <span class="token punctuation">-</span> 前端
+  <span class="token punctuation">-</span> 大数据
+<span class="token comment"># 缩略写法</span>
+<span class="token key atrule">likes</span><span class="token punctuation">:</span> <span class="token punctuation">[</span>王者荣耀<span class="token punctuation">,</span> 刺激战场<span class="token punctuation">]</span>
+
+<span class="token comment"># 对象数组（格式一：紧凑写法）</span>
+<span class="token key atrule">users</span><span class="token punctuation">:</span>
+  <span class="token punctuation">-</span> <span class="token key atrule">name</span><span class="token punctuation">:</span> Tom
+    <span class="token key atrule">age</span><span class="token punctuation">:</span> <span class="token number">4</span>
+  <span class="token punctuation">-</span> <span class="token key atrule">name</span><span class="token punctuation">:</span> Jerry
+    <span class="token key atrule">age</span><span class="token punctuation">:</span> <span class="token number">5</span>
+
+<span class="token comment"># 对象数组（格式二：换行写法，效果同上）</span>
+<span class="token key atrule">users2</span><span class="token punctuation">:</span>
+  <span class="token punctuation">-</span>
+    <span class="token key atrule">name</span><span class="token punctuation">:</span> Tom
+    <span class="token key atrule">age</span><span class="token punctuation">:</span> <span class="token number">4</span>
+  <span class="token punctuation">-</span>
+    <span class="token key atrule">name</span><span class="token punctuation">:</span> Jerry
+    <span class="token key atrule">age</span><span class="token punctuation">:</span> <span class="token number">5</span>
+
+<span class="token comment"># 对象数组（缩略写法）</span>
+<span class="token key atrule">users3</span><span class="token punctuation">:</span> <span class="token punctuation">[</span><span class="token punctuation">{</span><span class="token key atrule">name</span><span class="token punctuation">:</span> Tom<span class="token punctuation">,</span> <span class="token key atrule">age</span><span class="token punctuation">:</span> <span class="token number">4</span><span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">{</span><span class="token key atrule">name</span><span class="token punctuation">:</span> Jerry<span class="token punctuation">,</span> <span class="token key atrule">age</span><span class="token punctuation">:</span> <span class="token number">5</span><span class="token punctuation">}</span><span class="token punctuation">]</span>
+</code></pre>
+<h3><a id="33__74"></a>3.3 对象格式</h3>
+<p>通过缩进表示对象的层级关系，是日常开发中最常用的格式：</p>
+<pre><code class="prism language-yaml"><span class="token key atrule">enterprise</span><span class="token punctuation">:</span>
+  <span class="token key atrule">name</span><span class="token punctuation">:</span> itcast  <span class="token comment"># 一级属性</span>
+  <span class="token key atrule">age</span><span class="token punctuation">:</span> <span class="token number">16</span>       <span class="token comment"># 一级属性</span>
+  <span class="token key atrule">subject</span><span class="token punctuation">:</span>      <span class="token comment"># 一级属性（嵌套数组）</span>
+    <span class="token punctuation">-</span> Java
+    <span class="token punctuation">-</span> 前端
+    <span class="token punctuation">-</span> 大数据
+</code></pre>
+<h2><a id="YAML3_86"></a>四、YAML数据读取（3种核心方式）</h2>
+<p>YAML中的配置数据最终要被Java代码读取使用，SpringBoot提供了3种读取方式，适配不同场景：</p>
+<h3><a id="41_Value__SpEL_89"></a>4.1 读取单一数据（@Value + SpEL）</h3>
+<p>适合读取少量、零散的配置项，使用<code>@Value</code>注解配合SpEL表达式（<code>${属性层级}</code>）读取：</p>
+<pre><code class="prism language-java"><span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>beans<span class="token punctuation">.</span>factory<span class="token punctuation">.</span>annotation<span class="token punctuation">.</span></span><span class="token class-name">Value</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>stereotype<span class="token punctuation">.</span></span><span class="token class-name">Component</span></span><span class="token punctuation">;</span>
+
+<span class="token comment">// 必须交给Spring管理（加@Component）</span>
+<span class="token annotation punctuation">@Component</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">YamlReader</span> <span class="token punctuation">{</span>
+    <span class="token comment">// 读取单一属性：enterprise.name</span>
+    <span class="token annotation punctuation">@Value</span><span class="token punctuation">(</span><span class="token string">"${enterprise.name}"</span><span class="token punctuation">)</span>
+    <span class="token keyword">private</span> <span class="token class-name">String</span> enterpriseName<span class="token punctuation">;</span>
+    
+    <span class="token comment">// 读取数组中的元素：subject[0]</span>
+    <span class="token annotation punctuation">@Value</span><span class="token punctuation">(</span><span class="token string">"${subject[0]}"</span><span class="token punctuation">)</span>
+    <span class="token keyword">private</span> <span class="token class-name">String</span> firstSubject<span class="token punctuation">;</span>
+    
+    <span class="token comment">// 读取对象数组中的元素：users[0].name</span>
+    <span class="token annotation punctuation">@Value</span><span class="token punctuation">(</span><span class="token string">"${users[0].name}"</span><span class="token punctuation">)</span>
+    <span class="token keyword">private</span> <span class="token class-name">String</span> firstUserName<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><strong>核心要点</strong>：</p>
+<ul>
+<li><code>@Value</code>必须写在Spring管控的Bean（加@Component/@Service等）的属性上</li>
+<li>多层级属性用「.」分隔，数组元素用「[索引]」定位</li>
+</ul>
+<h3><a id="42_Environment_115"></a>4.2 读取全部数据（Environment）</h3>
+<p>适合读取大量零散配置项，通过<code>Environment</code>对象封装所有配置数据，自动装配后即可使用：</p>
+<pre><code class="prism language-java"><span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>beans<span class="token punctuation">.</span>factory<span class="token punctuation">.</span>annotation<span class="token punctuation">.</span></span><span class="token class-name">Autowired</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>core<span class="token punctuation">.</span>env<span class="token punctuation">.</span></span><span class="token class-name">Environment</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>stereotype<span class="token punctuation">.</span></span><span class="token class-name">Component</span></span><span class="token punctuation">;</span>
+
+<span class="token annotation punctuation">@Component</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">YamlAllReader</span> <span class="token punctuation">{</span>
+    <span class="token comment">// 自动装配Environment对象（封装所有YAML数据）</span>
+    <span class="token annotation punctuation">@Autowired</span>
+    <span class="token keyword">private</span> <span class="token class-name">Environment</span> env<span class="token punctuation">;</span>
+    
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">readAllData</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment">// 读取单一属性</span>
+        <span class="token class-name">String</span> enterpriseName <span class="token operator">=</span> env<span class="token punctuation">.</span><span class="token function">getProperty</span><span class="token punctuation">(</span><span class="token string">"enterprise.name"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">// 读取数组元素（指定返回类型）</span>
+        <span class="token class-name">Integer</span> userAge <span class="token operator">=</span> env<span class="token punctuation">.</span><span class="token function">getProperty</span><span class="token punctuation">(</span><span class="token string">"users[0].age"</span><span class="token punctuation">,</span> <span class="token class-name">Integer</span><span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">// 读取空值（指定默认值，避免null）</span>
+        <span class="token class-name">String</span> nullValue <span class="token operator">=</span> env<span class="token punctuation">.</span><span class="token function">getProperty</span><span class="token punctuation">(</span><span class="token string">"null"</span><span class="token punctuation">,</span> <span class="token string">"默认值"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><strong>核心要点</strong>：</p>
+<ul>
+<li><code>Environment</code>由Spring自动初始化，通过<code>@Autowired</code>注入即可</li>
+<li><code>getProperty()</code>支持指定返回类型，也可设置默认值（避免空指针）</li>
+</ul>
+<h3><a id="43_ConfigurationProperties_142"></a>4.3 读取对象数据（@ConfigurationProperties）</h3>
+<p>适合读取一组关联的配置项（如整个enterprise对象），将配置直接绑定到Java对象，是开发中最推荐的方式：</p>
+<h4><a id="1JavaYAML_145"></a>步骤1：定义Java实体类（与YAML配置对应）</h4>
+<pre><code class="prism language-java"><span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>boot<span class="token punctuation">.</span>context<span class="token punctuation">.</span>properties<span class="token punctuation">.</span></span><span class="token class-name">ConfigurationProperties</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>stereotype<span class="token punctuation">.</span></span><span class="token class-name">Component</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>util<span class="token punctuation">.</span></span><span class="token class-name">List</span></span><span class="token punctuation">;</span>
+
+<span class="token comment">// 1. 交给Spring管理</span>
+<span class="token annotation punctuation">@Component</span>
+<span class="token comment">// 2. 指定配置前缀（绑定enterprise下的所有属性）</span>
+<span class="token annotation punctuation">@ConfigurationProperties</span><span class="token punctuation">(</span>prefix <span class="token operator">=</span> <span class="token string">"enterprise"</span><span class="token punctuation">)</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">Enterprise</span> <span class="token punctuation">{</span>
+    <span class="token comment">// 属性名必须与YAML中的属性名完全一致（大小写敏感）</span>
+    <span class="token keyword">private</span> <span class="token class-name">String</span> name<span class="token punctuation">;</span>
+    <span class="token keyword">private</span> <span class="token class-name">Integer</span> age<span class="token punctuation">;</span>
+    <span class="token keyword">private</span> <span class="token class-name">List</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">&gt;</span></span> subject<span class="token punctuation">;</span>
+    
+    <span class="token comment">// 必须提供getter/setter（Spring通过反射赋值）</span>
+    <span class="token keyword">public</span> <span class="token class-name">String</span> <span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token keyword">return</span> name<span class="token punctuation">;</span> <span class="token punctuation">}</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">setName</span><span class="token punctuation">(</span><span class="token class-name">String</span> name<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token keyword">this</span><span class="token punctuation">.</span>name <span class="token operator">=</span> name<span class="token punctuation">;</span> <span class="token punctuation">}</span>
+    <span class="token keyword">public</span> <span class="token class-name">Integer</span> <span class="token function">getAge</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token keyword">return</span> age<span class="token punctuation">;</span> <span class="token punctuation">}</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">setAge</span><span class="token punctuation">(</span><span class="token class-name">Integer</span> age<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token keyword">this</span><span class="token punctuation">.</span>age <span class="token operator">=</span> age<span class="token punctuation">;</span> <span class="token punctuation">}</span>
+    <span class="token keyword">public</span> <span class="token class-name">List</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">&gt;</span></span> <span class="token function">getSubject</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token keyword">return</span> subject<span class="token punctuation">;</span> <span class="token punctuation">}</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">setSubject</span><span class="token punctuation">(</span><span class="token class-name">List</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">&gt;</span></span> subject<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token keyword">this</span><span class="token punctuation">.</span>subject <span class="token operator">=</span> subject<span class="token punctuation">;</span> <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h4><a id="2_171"></a>步骤2：注入并使用</h4>
+<pre><code class="prism language-java"><span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>beans<span class="token punctuation">.</span>factory<span class="token punctuation">.</span>annotation<span class="token punctuation">.</span></span><span class="token class-name">Autowired</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>stereotype<span class="token punctuation">.</span></span><span class="token class-name">Service</span></span><span class="token punctuation">;</span>
+
+<span class="token annotation punctuation">@Service</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">EnterpriseService</span> <span class="token punctuation">{</span>
+    <span class="token comment">// 直接注入绑定好数据的对象</span>
+    <span class="token annotation punctuation">@Autowired</span>
+    <span class="token keyword">private</span> <span class="token class-name">Enterprise</span> enterprise<span class="token punctuation">;</span>
+    
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">printEnterpriseInfo</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"企业名称："</span> <span class="token operator">+</span> enterprise<span class="token punctuation">.</span><span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"企业年龄："</span> <span class="token operator">+</span> enterprise<span class="token punctuation">.</span><span class="token function">getAge</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"主营科目："</span> <span class="token operator">+</span> enterprise<span class="token punctuation">.</span><span class="token function">getSubject</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><strong>核心要点</strong>：</p>
+<ul>
+<li>实体类必须加<code>@Component</code>（交给Spring管理）</li>
+<li><code>@ConfigurationProperties</code>的<code>prefix</code>指定配置前缀，无需写完整层级</li>
+<li>实体类属性名与YAML属性名必须一致，且必须提供getter/setter</li>
+</ul>
+<h2><a id="YAML_194"></a>五、YAML高级用法</h2>
+<h3><a id="51__195"></a>5.1 配置数据引用（${属性名}）</h3>
+<p>当多个配置项有重复前缀时，可通过「变量引用」简化书写，减少冗余：</p>
+<pre><code class="prism language-yaml"><span class="token comment"># 定义基础变量</span>
+<span class="token key atrule">baseDir</span><span class="token punctuation">:</span> /usr/local/fire
+
+<span class="token comment"># 引用变量</span>
+<span class="token key atrule">center</span><span class="token punctuation">:</span>
+  <span class="token key atrule">dataDir</span><span class="token punctuation">:</span> $<span class="token punctuation">{</span>baseDir<span class="token punctuation">}</span>/data
+  <span class="token key atrule">tmpDir</span><span class="token punctuation">:</span> $<span class="token punctuation">{</span>baseDir<span class="token punctuation">}</span>/tmp
+  <span class="token key atrule">logDir</span><span class="token punctuation">:</span> $<span class="token punctuation">{</span>baseDir<span class="token punctuation">}</span>/log
+  <span class="token key atrule">msgDir</span><span class="token punctuation">:</span> $<span class="token punctuation">{</span>baseDir<span class="token punctuation">}</span>/msgDir
+
+<span class="token comment"># Windows路径同理</span>
+<span class="token comment"># baseDir: D:/usr/local/fire</span>
+</code></pre>
+<h3><a id="52__212"></a>5.2 特殊字符处理（双引号包裹）</h3>
+<p>字符串中包含转义字符（如<code>\t</code>、<code>\n</code>）时，必须用双引号包裹，否则转义字符会被原样输出：</p>
+<pre><code class="prism language-yaml"><span class="token comment"># 正确：双引号包裹，\t解析为制表符，\n解析为换行</span>
+<span class="token key atrule">lesson</span><span class="token punctuation">:</span> <span class="token string">"Spring\tboot\nlesson"</span>
+
+<span class="token comment"># 错误：无引号，\t和\n会被原样输出</span>
+<span class="token key atrule">lesson2</span><span class="token punctuation">:</span> Spring\tboot\nlesson
+</code></pre>
+<h2><a id="_222"></a>六、常见问题与避坑指南</h2>
+<ol>
+<li><strong>语法报错</strong>：冒号后未加空格（如<code>name:itcast</code>），或使用Tab键缩进</li>
+<li><strong>数据读取失败</strong>：<code>@Value</code>写在非Spring Bean的类中，或<code>@ConfigurationProperties</code>未加<code>@Component</code></li>
+<li><strong>对象绑定失败</strong>：实体类属性名与YAML属性名不一致，或未提供getter/setter</li>
+<li><strong>无语法提示</strong>：IDEA未识别SpringBoot项目，需手动配置Spring Facet（参考前文）</li>
+</ol>
+<h2><a id="_228"></a>总结</h2>
+<ol>
+<li>YAML核心语法：大小写敏感、缩进表层级、冒号后加空格、#表注释，核心是「数据为核心」；</li>
+<li>数据读取三方式：单一数据用<code>@Value</code>，全部数据用<code>Environment</code>，对象数据用<code>@ConfigurationProperties</code>（推荐）；</li>
+<li>高级用法：配置引用减少冗余，双引号处理特殊字符，是日常开发提效的关键。</li>
+</ol>
+</div>
+</body>
+
+</html>

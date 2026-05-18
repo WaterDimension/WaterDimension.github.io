@@ -1,0 +1,540 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>万字干货｜Cookie与Session深度解析（从原理到实战，避坑指南全收录）</title>
+  <link rel="stylesheet" href="https://stackedit.io/style.css" />
+</head>
+
+<body class="stackedit">
+  <div class="stackedit__html"><h1><a id="CookieSession_0"></a>万字干货｜Cookie与Session深度解析（从原理到实战，避坑指南全收录）</h1>
+<p>作为后端/前端开发者，Cookie 和 Session 是绕不开的基础知识点——登录态维持、用户身份认证、个性化配置，几乎所有Web项目都离不开它们。但很多开发者只停留在“会用”的层面，对其底层原理、区别、安全隐患一知半解：</p>
+<p>“Cookie 存哪里？Session 存在服务器还是客户端？”“为什么有时候登录会失效？”“Cookie 怎么防止被篡改？”“分布式系统中 Session 如何共享？”</p>
+<p>今天这篇文章，就从「原理→区别→实战→避坑」四个维度，手把手拆解 Cookie 与 Session，全程技术向、无废话，既有底层逻辑拆解，也有实际开发中的最佳实践，不管是新手还是有经验的开发者，都能有所收获，彻底搞懂这两个核心知识点！</p>
+<h2><a id="_10"></a>一、概述</h2>
+<p>本文核心围绕 Cookie 和 Session 展开，打破“只知其然不知其所以然”的困境，不仅讲清楚“是什么、怎么用”，更讲透“为什么这么设计、底层逻辑是什么、开发中会踩哪些坑”。</p>
+<p>全文分为 5 个核心部分，循序渐进，新手可按顺序阅读，老手可直接跳至需要的章节：</p>
+<ol>
+<li>
+<p>核心概念：Cookie 和 Session 到底是什么，各自的本质的是什么；</p>
+</li>
+<li>
+<p>底层原理：Cookie 如何传递、Session 如何创建和销毁，工作流程拆解；</p>
+</li>
+<li>
+<p>核心区别：Cookie 与 Session 的 8 大区别，什么时候用哪个；</p>
+</li>
+<li>
+<p>实战场景：登录态维持、记住密码、Session 共享等实战案例（附代码片段）；</p>
+</li>
+<li>
+<p>避坑指南：常见问题（登录失效、Cookie 篡改、跨域问题）及解决方案。</p>
+</li>
+</ol>
+<p>话不多说，咱们正式开始，从最基础的概念入手，一步步深入！</p>
+<h2><a id="Cookie__Session__28"></a>二、核心概念：Cookie 与 Session 到底是什么？</h2>
+<p>在讲原理之前，先明确两个核心概念——很多人混淆 Cookie 和 Session，本质是没搞懂它们的“定位”和“本质”。一句话总结：<strong>Cookie 是客户端存储工具，Session 是服务器端存储工具，二者协同工作，实现 Web 端的状态维持</strong>。</p>
+<p>Web 协议本身是“无状态”的——也就是说，服务器无法记住两次请求是否来自同一个客户端（比如你第一次访问网站，第二次再访问，服务器不知道这是同一个人）。而 Cookie 和 Session，就是用来解决“无状态”问题的核心方案。</p>
+<h3><a id="21_Cookie_34"></a>2.1 Cookie：客户端的“小型存储容器”</h3>
+<p>Cookie 本质是 <strong>服务器发送给客户端浏览器的一段小型文本数据</strong>，浏览器会将其保存起来（可以存在内存中，也可以存在本地文件中），后续每次向该服务器发送请求时，都会自动携带这段文本数据，让服务器“认出”客户端。</p>
+<p>举个通俗的例子：你去超市购物，第一次去的时候，超市给你办了一张会员卡（Cookie），卡上记录了你的基本信息；下次你再去，只要出示会员卡，超市就知道你是老客户，能识别你的身份、会员等级等信息——Cookie 就相当于这张“会员卡”。</p>
+<p>Cookie 的核心特点：</p>
+<ul>
+<li>
+<p>存储在<strong>客户端浏览器</strong>（内存/本地文件），服务器不存储 Cookie 本身，只读取客户端携带的 Cookie；</p>
+</li>
+<li>
+<p>存储容量有限，一般不超过 4KB，只能存储文本数据（不能存储图片、视频等二进制数据）；</p>
+</li>
+<li>
+<p>有过期时间（可由服务器设置），过期后自动删除；如果不设置过期时间，关闭浏览器后 Cookie 就会消失（内存中的 Cookie）；</p>
+</li>
+<li>
+<p>与域名绑定，只能被设置 Cookie 的域名读取（比如百度的 Cookie，只能被百度的网站读取，不能被谷歌读取，保证安全性）。</p>
+</li>
+</ul>
+<h3><a id="22_Session_50"></a>2.2 Session：服务器端的“用户状态仓库”</h3>
+<p>Session 本质是 <strong>服务器端为每个客户端创建的“专属存储空间”</strong>，用来存储客户端的状态信息（比如用户登录信息、权限、操作记录等）。每个客户端对应一个唯一的 Session，服务器通过 Session ID 来区分不同的客户端。</p>
+<p>继续用超市的例子：你办了会员卡（Cookie），超市后台会为你建立一个专属档案（Session），档案里记录了你的消费记录、积分、会员等级等详细信息；你每次出示会员卡（Cookie 中携带 Session ID），超市工作人员就会通过会员卡上的编号，找到你的专属档案，获取你的相关信息——Session 就相当于这张“专属档案”。</p>
+<p>Session 的核心特点：</p>
+<ul>
+<li>
+<p>存储在<strong>服务器端</strong>（内存、数据库、Redis 等），客户端无法直接访问，安全性更高；</p>
+</li>
+<li>
+<p>存储容量无限制（取决于服务器资源），可以存储任意类型的数据（文本、对象等）；</p>
+</li>
+<li>
+<p>有过期时间（可由服务器设置），过期后 Session 自动销毁；如果客户端长时间不操作，Session 也会自动失效（默认一般是 30 分钟）；</p>
+</li>
+<li>
+<p>每个 Session 对应一个唯一的 Session ID，Session ID 通常会通过 Cookie 传递给客户端（也可以通过 URL 传递，但不推荐）。</p>
+</li>
+</ul>
+<h3><a id="23_Cookie__Session__66"></a>2.3 核心关联：Cookie 与 Session 如何协同工作？</h3>
+<p>很多人误以为 Cookie 和 Session 是“二选一”的关系，其实不是——它们是“协同工作”的，最常见的流程如下：</p>
+<ol>
+<li>
+<p>客户端第一次访问服务器，服务器验证客户端身份（比如登录）后，创建一个专属 Session，生成唯一的 Session ID；</p>
+</li>
+<li>
+<p>服务器将 Session ID 封装到 Cookie 中，发送给客户端浏览器；</p>
+</li>
+<li>
+<p>客户端浏览器接收 Cookie 后，将其保存起来（内存/本地文件）；</p>
+</li>
+<li>
+<p>客户端后续每次访问服务器时，都会自动携带这个 Cookie（包含 Session ID）；</p>
+</li>
+<li>
+<p>服务器接收请求后，从 Cookie 中提取 Session ID，通过 Session ID 找到对应的 Session，获取客户端的状态信息，从而“认出”客户端。</p>
+</li>
+</ol>
+<p>简单来说：<strong>Session 负责在服务器端存储用户状态，Cookie 负责在客户端和服务器之间传递 Session ID，二者缺一不可</strong>（当然，也有不用 Cookie 传递 Session ID 的方式，比如 URL 重写，但很少用，后面会讲）。</p>
+<h2><a id="Cookie__Session__82"></a>三、底层原理：Cookie 与 Session 的工作流程拆解</h2>
+<p>搞懂了核心概念，接下来拆解底层原理——只有理解了工作流程，才能在开发中快速定位问题（比如登录失效、Cookie 不生效等）。</p>
+<h3><a id="31_Cookie__86"></a>3.1 Cookie 的工作流程（从创建到使用）</h3>
+<p>Cookie 的工作流程主要分为 3 步：创建 → 存储 → 携带，每一步都有明确的逻辑和细节，新手容易踩坑的地方也在这里。</p>
+<h4><a id="311__Cookie_90"></a>3.1.1 第一步：服务器创建 Cookie</h4>
+<p>当客户端第一次访问服务器（比如登录请求），服务器处理完请求后，会通过 HTTP 响应头中的 <code>Set-Cookie</code> 字段，向客户端发送 Cookie。</p>
+<p>举个 HTTP 响应头的示例（后端代码会自动生成，这里只看原理）：</p>
+<pre><code class="prism language-http">HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+Set-Cookie: sessionId=abc123456; Path=/; Domain=example.com; Max-Age=3600; HttpOnly; Secure
+
+</code></pre>
+<p>这里的每个参数都有讲究，后面会详细讲，核心是：服务器通过 <code>Set-Cookie</code> 字段，将 Cookie 数据（sessionId=abc123456）发送给客户端。</p>
+<h4><a id="312__Cookie_105"></a>3.1.2 第二步：客户端存储 Cookie</h4>
+<p>客户端浏览器接收响应后，会解析 <code>Set-Cookie</code> 字段，将 Cookie 数据保存起来。存储位置分为两种：</p>
+<ul>
+<li>
+<p>内存 Cookie：如果不设置过期时间（Max-Age 或 Expires），Cookie 会存储在内存中，关闭浏览器后自动删除（比如临时登录态）；</p>
+</li>
+<li>
+<p>持久化 Cookie：如果设置了过期时间，Cookie 会存储在本地文件中（不同浏览器存储路径不同），即使关闭浏览器，再次打开后依然存在，直到过期。</p>
+</li>
+</ul>
+<p>注意：Cookie 会严格遵循“域名绑定”原则——只有设置 Cookie 的域名（比如 example.com），才能读取这个 Cookie，其他域名无法访问，这是浏览器的安全机制。</p>
+<h4><a id="313__Cookie__115"></a>3.1.3 第三步：客户端携带 Cookie 发送请求</h4>
+<p>客户端后续每次向该服务器发送请求时，都会自动在 HTTP 请求头中的 <code>Cookie</code> 字段，携带该域名下的所有 Cookie 数据，发送给服务器。</p>
+<p>举个 HTTP 请求头的示例：</p>
+<pre><code class="prism language-http">GET /index HTTP/1.1
+Host: example.com
+Cookie: sessionId=abc123456; username=test
+
+</code></pre>
+<p>服务器接收请求后，解析 <code>Cookie</code> 字段，获取其中的 Session ID 等信息，从而识别客户端身份。</p>
+<h3><a id="32_Session__130"></a>3.2 Session 的工作流程（从创建到销毁）</h3>
+<p>Session 的工作流程比 Cookie 更复杂，核心分为 4 步：创建 → 关联 → 使用 → 销毁，重点是“Session ID 的关联”和“过期销毁机制”。</p>
+<h4><a id="321__Session_134"></a>3.2.1 第一步：服务器创建 Session</h4>
+<p>当客户端第一次访问服务器（比如登录成功后），服务器会为该客户端创建一个专属的 Session 对象，同时生成一个唯一的 Session ID（通常是一串随机字符串，比如 abc123456）。</p>
+<p>Session 对象会存储在服务器的存储介质中，常见的存储方式有 3 种：</p>
+<ul>
+<li>
+<p>内存存储：最常见，速度最快，但服务器重启后 Session 会全部丢失（适合开发环境，不适合生产环境）；</p>
+</li>
+<li>
+<p>数据库存储（MySQL、PostgreSQL 等）：持久化存储，服务器重启后 Session 不会丢失，但速度较慢；</p>
+</li>
+<li>
+<p>缓存存储（Redis、Memcached 等）：兼顾速度和持久化，是生产环境的最佳选择（Redis 支持过期时间，自动销毁过期 Session）。</p>
+</li>
+</ul>
+<h4><a id="322_Session__Session_ID_146"></a>3.2.2 第二步：Session 与客户端关联（传递 Session ID）</h4>
+<p>服务器创建 Session 后，需要将 Session ID 传递给客户端，让客户端后续请求时能携带 Session ID，从而关联到对应的 Session。</p>
+<p>最常用的方式是 <strong>通过 Cookie 传递 Session ID</strong>（也就是我们前面说的，服务器通过 <code>Set-Cookie</code> 字段，将 Session ID 封装到 Cookie 中，发送给客户端）。</p>
+<p>还有两种不常用的方式（不推荐）：</p>
+<ul>
+<li>
+<p>URL 重写：将 Session ID 拼接在 URL 后面（比如 http://example.com/index?sessionId=abc123456），缺点是不安全（URL 容易泄露）、不美观；</p>
+</li>
+<li>
+<p>表单提交：将 Session ID 放在表单中，通过 POST 请求提交，缺点是操作繁琐，且容易被篡改。</p>
+</li>
+</ul>
+<h4><a id="323_Session__158"></a>3.2.3 第三步：Session 的使用（状态维持）</h4>
+<p>客户端后续每次访问服务器时，都会携带 Session ID（通过 Cookie），服务器接收请求后，通过 Session ID 从存储介质中找到对应的 Session 对象，获取客户端的状态信息（比如用户登录信息、权限等），从而实现“状态维持”。</p>
+<p>举个例子：用户登录成功后，服务器将用户信息（用户名、用户 ID、权限）存储在 Session 中；用户访问需要登录的页面时，服务器通过 Session ID 找到 Session，验证用户是否已登录，如果已登录，就展示页面；如果未登录，就跳转到登录页。</p>
+<h4><a id="324_Session__164"></a>3.2.4 第四步：Session 的销毁</h4>
+<p>Session 不会一直存在，会在以下 3 种情况下被销毁，这也是“登录失效”的核心原因：</p>
+<ul>
+<li>
+<p>过期销毁：服务器为 Session 设置了过期时间（比如 30 分钟），如果客户端长时间不操作（没有发送请求），Session 会自动过期销毁；</p>
+</li>
+<li>
+<p>主动销毁：客户端主动退出登录（比如点击“退出登录”按钮），服务器收到请求后，主动删除对应的 Session；</p>
+</li>
+<li>
+<p>服务器销毁：服务器重启、宕机，或者存储介质（比如 Redis）故障，Session 会全部丢失（所以生产环境推荐用 Redis 持久化存储，避免服务器重启后 Session 丢失）。</p>
+</li>
+</ul>
+<h2><a id="Cookie__Session_8__174"></a>四、核心区别：Cookie 与 Session 8 大区别（必背）</h2>
+<p>这是面试和开发中最常遇到的问题，很多人只记表面区别，这里整理了 8 个核心区别，从存储位置、安全性、容量等维度，彻底分清二者：</p>
+
+<table>
+<thead>
+<tr>
+<th>对比维度</th>
+<th>Cookie</th>
+<th>Session</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>存储位置</td>
+<td>客户端浏览器（内存/本地文件）</td>
+<td>服务器端（内存/数据库/Redis）</td>
+</tr>
+<tr>
+<td>安全性</td>
+<td>较低，客户端可直接修改、删除，容易被篡改</td>
+<td>较高，客户端无法直接访问，只能通过 Session ID 间接关联</td>
+</tr>
+<tr>
+<td>存储容量</td>
+<td>有限制，单条 Cookie 不超过 4KB，一个域名最多存储 50 条左右</td>
+<td>无限制，取决于服务器资源（内存、存储介质）</td>
+</tr>
+<tr>
+<td>存储类型</td>
+<td>只能存储文本数据（字符串）</td>
+<td>可存储任意类型数据（文本、对象、集合等）</td>
+</tr>
+<tr>
+<td>过期机制</td>
+<td>可设置过期时间（Max-Age/Expires），过期后自动删除；不设置则关闭浏览器后删除</td>
+<td>可设置过期时间，过期后自动销毁；客户端长时间不操作也会自动失效；服务器重启可能丢失</td>
+</tr>
+<tr>
+<td>传递方式</td>
+<td>通过 HTTP 请求头的 Cookie 字段，自动携带</td>
+<td>通过 Session ID 传递（通常封装在 Cookie 中），不直接传递 Session 本身</td>
+</tr>
+<tr>
+<td>资源消耗</td>
+<td>几乎不消耗服务器资源，消耗客户端浏览器资源</td>
+<td>消耗服务器资源（存储、查询 Session），客户端无消耗</td>
+</tr>
+<tr>
+<td>跨域支持</td>
+<td>支持跨域（需设置 CORS 相关配置），但有严格的域名限制</td>
+<td>不支持跨域（Session 与服务器绑定），跨域场景需特殊处理（比如 Token）</td>
+</tr>
+</tbody>
+</table><h3><a id="_Cookie_Session_189"></a>补充：什么时候用 Cookie？什么时候用 Session？</h3>
+<p>结合上面的区别，给出实际开发中的选择建议，避免盲目使用：</p>
+<ul>
+<li>
+<p>用 Cookie 的场景：存储不敏感、体积小的信息，比如记住密码（加密后存储）、用户偏好设置、广告追踪等；</p>
+</li>
+<li>
+<p>用 Session 的场景：存储敏感、体积较大的信息，比如用户登录态、权限信息、操作记录等；</p>
+</li>
+<li>
+<p>注意：实际开发中，几乎不会单独使用 Cookie 或 Session，都是二者协同工作（Session 存敏感信息，Cookie 传 Session ID）。</p>
+</li>
+</ul>
+<h2><a id="Cookie__Session__199"></a>五、实战场景：Cookie 与 Session 的实际应用（附代码片段）</h2>
+<p>理论讲完，结合实际开发场景，给出几个常用的实战案例，附后端代码片段（以 Java 为例，其他语言逻辑一致），新手可以直接参考使用。</p>
+<h3><a id="51_1_203"></a>5.1 场景1：用户登录态维持（最常用）</h3>
+<p>核心逻辑：用户登录成功后，创建 Session 存储用户信息，将 Session ID 封装到 Cookie 中，发送给客户端；后续请求时，客户端携带 Cookie 中的 Session ID，服务器验证 Session 有效性。</p>
+<pre><code class="prism language-java"><span class="token comment">// 1. 用户登录接口（后端代码）</span>
+<span class="token annotation punctuation">@RequestMapping</span><span class="token punctuation">(</span><span class="token string">"/login"</span><span class="token punctuation">)</span>
+<span class="token keyword">public</span> <span class="token class-name">Result</span> <span class="token function">login</span><span class="token punctuation">(</span><span class="token class-name">UserLoginDTO</span> loginDTO<span class="token punctuation">,</span> <span class="token class-name">HttpServletRequest</span> request<span class="token punctuation">,</span> <span class="token class-name">HttpServletResponse</span> response<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token comment">// 验证用户名密码（省略逻辑）</span>
+    <span class="token class-name">User</span> user <span class="token operator">=</span> userService<span class="token punctuation">.</span><span class="token function">login</span><span class="token punctuation">(</span>loginDTO<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    
+    <span class="token comment">// 2. 创建 Session，存储用户信息</span>
+    <span class="token class-name">HttpSession</span> session <span class="token operator">=</span> request<span class="token punctuation">.</span><span class="token function">getSession</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    session<span class="token punctuation">.</span><span class="token function">setAttribute</span><span class="token punctuation">(</span><span class="token string">"loginUser"</span><span class="token punctuation">,</span> user<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 存储用户信息</span>
+    session<span class="token punctuation">.</span><span class="token function">setMaxInactiveInterval</span><span class="token punctuation">(</span><span class="token number">3600</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 设置 Session 过期时间（1小时）</span>
+    
+    <span class="token comment">// 3. 创建 Cookie，存储 Session ID</span>
+    <span class="token class-name">Cookie</span> cookie <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Cookie</span><span class="token punctuation">(</span><span class="token string">"sessionId"</span><span class="token punctuation">,</span> session<span class="token punctuation">.</span><span class="token function">getId</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    cookie<span class="token punctuation">.</span><span class="token function">setPath</span><span class="token punctuation">(</span><span class="token string">"/"</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 所有路径都能访问该 Cookie</span>
+    cookie<span class="token punctuation">.</span><span class="token function">setDomain</span><span class="token punctuation">(</span><span class="token string">"example.com"</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 绑定域名</span>
+    cookie<span class="token punctuation">.</span><span class="token function">setMaxAge</span><span class="token punctuation">(</span><span class="token number">3600</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// Cookie 过期时间（1小时）</span>
+    cookie<span class="token punctuation">.</span><span class="token function">setHttpOnly</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 禁止客户端 JS 访问 Cookie，防止 XSS 攻击</span>
+    cookie<span class="token punctuation">.</span><span class="token function">setSecure</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 只在 HTTPS 协议下传递，防止中间人攻击</span>
+    
+    <span class="token comment">// 4. 将 Cookie 发送给客户端</span>
+    response<span class="token punctuation">.</span><span class="token function">addCookie</span><span class="token punctuation">(</span>cookie<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    
+    <span class="token keyword">return</span> <span class="token class-name">Result</span><span class="token punctuation">.</span><span class="token function">success</span><span class="token punctuation">(</span><span class="token string">"登录成功"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">// 5. 验证登录态（拦截器代码）</span>
+<span class="token annotation punctuation">@Component</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">LoginInterceptor</span> <span class="token keyword">implements</span> <span class="token class-name">HandlerInterceptor</span> <span class="token punctuation">{</span>
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">boolean</span> <span class="token function">preHandle</span><span class="token punctuation">(</span><span class="token class-name">HttpServletRequest</span> request<span class="token punctuation">,</span> <span class="token class-name">HttpServletResponse</span> response<span class="token punctuation">,</span> <span class="token class-name">Object</span> handler<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">Exception</span> <span class="token punctuation">{</span>
+        <span class="token comment">// 获取 Cookie 中的 Session ID</span>
+        <span class="token class-name">Cookie</span><span class="token punctuation">[</span><span class="token punctuation">]</span> cookies <span class="token operator">=</span> request<span class="token punctuation">.</span><span class="token function">getCookies</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">String</span> sessionId <span class="token operator">=</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>cookies <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token class-name">Cookie</span> cookie <span class="token operator">:</span> cookies<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token string">"sessionId"</span><span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>cookie<span class="token punctuation">.</span><span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    sessionId <span class="token operator">=</span> cookie<span class="token punctuation">.</span><span class="token function">getValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token keyword">break</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+        
+        <span class="token comment">// 验证 Session 是否有效</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>sessionId <span class="token operator">==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            response<span class="token punctuation">.</span><span class="token function">sendRedirect</span><span class="token punctuation">(</span><span class="token string">"/login"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">return</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token class-name">HttpSession</span> session <span class="token operator">=</span> request<span class="token punctuation">.</span><span class="token function">getSession</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 不创建新 Session，只获取已存在的</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>session <span class="token operator">==</span> <span class="token keyword">null</span> <span class="token operator">||</span> session<span class="token punctuation">.</span><span class="token function">getAttribute</span><span class="token punctuation">(</span><span class="token string">"loginUser"</span><span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            response<span class="token punctuation">.</span><span class="token function">sendRedirect</span><span class="token punctuation">(</span><span class="token string">"/login"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">return</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        
+        <span class="token comment">// 刷新 Session 过期时间（用户操作后，重新计算过期时间）</span>
+        session<span class="token punctuation">.</span><span class="token function">setMaxInactiveInterval</span><span class="token punctuation">(</span><span class="token number">3600</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+</code></pre>
+<h3><a id="52_2Cookie__269"></a>5.2 场景2：记住密码功能（Cookie 持久化）</h3>
+<p>核心逻辑：用户勾选“记住密码”后，服务器将加密后的用户名和密码（或 Token）存储在持久化 Cookie 中（设置较长的过期时间）；用户下次访问时，浏览器自动携带 Cookie，服务器验证后自动登录。</p>
+<pre><code class="prism language-java"><span class="token comment">// 记住密码功能（登录接口中补充）</span>
+<span class="token annotation punctuation">@RequestMapping</span><span class="token punctuation">(</span><span class="token string">"/login"</span><span class="token punctuation">)</span>
+<span class="token keyword">public</span> <span class="token class-name">Result</span> <span class="token function">login</span><span class="token punctuation">(</span><span class="token class-name">UserLoginDTO</span> loginDTO<span class="token punctuation">,</span> <span class="token class-name">HttpServletRequest</span> request<span class="token punctuation">,</span> <span class="token class-name">HttpServletResponse</span> response<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token comment">// 验证用户名密码（省略逻辑）</span>
+    <span class="token class-name">User</span> user <span class="token operator">=</span> userService<span class="token punctuation">.</span><span class="token function">login</span><span class="token punctuation">(</span>loginDTO<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    
+    <span class="token comment">// 创建 Session（同上，省略）</span>
+    <span class="token class-name">HttpSession</span> session <span class="token operator">=</span> request<span class="token punctuation">.</span><span class="token function">getSession</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    session<span class="token punctuation">.</span><span class="token function">setAttribute</span><span class="token punctuation">(</span><span class="token string">"loginUser"</span><span class="token punctuation">,</span> user<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    session<span class="token punctuation">.</span><span class="token function">setMaxInactiveInterval</span><span class="token punctuation">(</span><span class="token number">3600</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    
+    <span class="token comment">// 如果用户勾选“记住密码”，创建持久化 Cookie</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>loginDTO<span class="token punctuation">.</span><span class="token function">isRememberMe</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment">// 加密用户名和密码（避免明文存储，提高安全性）</span>
+        <span class="token class-name">String</span> encryptInfo <span class="token operator">=</span> <span class="token function">encrypt</span><span class="token punctuation">(</span>user<span class="token punctuation">.</span><span class="token function">getUsername</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">+</span> <span class="token string">":"</span> <span class="token operator">+</span> user<span class="token punctuation">.</span><span class="token function">getPassword</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">Cookie</span> rememberCookie <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Cookie</span><span class="token punctuation">(</span><span class="token string">"rememberMe"</span><span class="token punctuation">,</span> encryptInfo<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        rememberCookie<span class="token punctuation">.</span><span class="token function">setPath</span><span class="token punctuation">(</span><span class="token string">"/"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        rememberCookie<span class="token punctuation">.</span><span class="token function">setDomain</span><span class="token punctuation">(</span><span class="token string">"example.com"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        rememberCookie<span class="token punctuation">.</span><span class="token function">setMaxAge</span><span class="token punctuation">(</span><span class="token number">30</span> <span class="token operator">*</span> <span class="token number">24</span> <span class="token operator">*</span> <span class="token number">3600</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 30天过期（持久化存储）</span>
+        rememberCookie<span class="token punctuation">.</span><span class="token function">setHttpOnly</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        response<span class="token punctuation">.</span><span class="token function">addCookie</span><span class="token punctuation">(</span>rememberCookie<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    
+    <span class="token comment">// 存储 Session ID 的 Cookie（同上，省略）</span>
+    <span class="token class-name">Cookie</span> sessionCookie <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Cookie</span><span class="token punctuation">(</span><span class="token string">"sessionId"</span><span class="token punctuation">,</span> session<span class="token punctuation">.</span><span class="token function">getId</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">// ... 省略 Cookie 设置</span>
+    response<span class="token punctuation">.</span><span class="token function">addCookie</span><span class="token punctuation">(</span>sessionCookie<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    
+    <span class="token keyword">return</span> <span class="token class-name">Result</span><span class="token punctuation">.</span><span class="token function">success</span><span class="token punctuation">(</span><span class="token string">"登录成功"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">// 自动登录（拦截器中补充）</span>
+<span class="token annotation punctuation">@Override</span>
+<span class="token keyword">public</span> <span class="token keyword">boolean</span> <span class="token function">preHandle</span><span class="token punctuation">(</span><span class="token class-name">HttpServletRequest</span> request<span class="token punctuation">,</span> <span class="token class-name">HttpServletResponse</span> response<span class="token punctuation">,</span> <span class="token class-name">Object</span> handler<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">Exception</span> <span class="token punctuation">{</span>
+    <span class="token comment">// 1. 先检查 Session 是否有效（已有登录态）</span>
+    <span class="token class-name">HttpSession</span> session <span class="token operator">=</span> request<span class="token punctuation">.</span><span class="token function">getSession</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>session <span class="token operator">!=</span> <span class="token keyword">null</span> <span class="token operator">&amp;&amp;</span> session<span class="token punctuation">.</span><span class="token function">getAttribute</span><span class="token punctuation">(</span><span class="token string">"loginUser"</span><span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        session<span class="token punctuation">.</span><span class="token function">setMaxInactiveInterval</span><span class="token punctuation">(</span><span class="token number">3600</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    
+    <span class="token comment">// 2. Session 无效，检查记住密码的 Cookie</span>
+    <span class="token class-name">Cookie</span><span class="token punctuation">[</span><span class="token punctuation">]</span> cookies <span class="token operator">=</span> request<span class="token punctuation">.</span><span class="token function">getCookies</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token class-name">String</span> rememberInfo <span class="token operator">=</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>cookies <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token class-name">Cookie</span> cookie <span class="token operator">:</span> cookies<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token string">"rememberMe"</span><span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>cookie<span class="token punctuation">.</span><span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                rememberInfo <span class="token operator">=</span> cookie<span class="token punctuation">.</span><span class="token function">getValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">break</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+    
+    <span class="token comment">// 3. 验证记住密码的 Cookie，自动登录</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>rememberInfo <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment">// 解密 Cookie 中的信息</span>
+        <span class="token class-name">String</span> decryptedInfo <span class="token operator">=</span> <span class="token function">decrypt</span><span class="token punctuation">(</span>rememberInfo<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">String</span><span class="token punctuation">[</span><span class="token punctuation">]</span> usernameAndPwd <span class="token operator">=</span> decryptedInfo<span class="token punctuation">.</span><span class="token function">split</span><span class="token punctuation">(</span><span class="token string">":"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">String</span> username <span class="token operator">=</span> usernameAndPwd<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+        <span class="token class-name">String</span> password <span class="token operator">=</span> usernameAndPwd<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+        
+        <span class="token comment">// 验证用户名密码，重新创建 Session</span>
+        <span class="token class-name">UserLoginDTO</span> loginDTO <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">UserLoginDTO</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        loginDTO<span class="token punctuation">.</span><span class="token function">setUsername</span><span class="token punctuation">(</span>username<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        loginDTO<span class="token punctuation">.</span><span class="token function">setPassword</span><span class="token punctuation">(</span>password<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">User</span> user <span class="token operator">=</span> userService<span class="token punctuation">.</span><span class="token function">login</span><span class="token punctuation">(</span>loginDTO<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        
+        session <span class="token operator">=</span> request<span class="token punctuation">.</span><span class="token function">getSession</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        session<span class="token punctuation">.</span><span class="token function">setAttribute</span><span class="token punctuation">(</span><span class="token string">"loginUser"</span><span class="token punctuation">,</span> user<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        session<span class="token punctuation">.</span><span class="token function">setMaxInactiveInterval</span><span class="token punctuation">(</span><span class="token number">3600</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    
+    <span class="token comment">// 4. 无登录态，跳转到登录页</span>
+    response<span class="token punctuation">.</span><span class="token function">sendRedirect</span><span class="token punctuation">(</span><span class="token string">"/login"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">return</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+</code></pre>
+<h3><a id="53_3_Session__354"></a>5.3 场景3：分布式系统中 Session 共享（生产环境必备）</h3>
+<p>问题：分布式系统中，多个服务器节点（比如 Tomcat 集群），Session 存储在单个节点的内存中，用户请求被分发到不同节点时，会出现“登录态丢失”（比如第一次请求到节点 A，创建 Session；第二次请求到节点 B，节点 B 没有该 Session，认为用户未登录）。</p>
+<p>解决方案：将 Session 存储在分布式缓存（Redis）中，所有节点共享 Redis 中的 Session，从而实现 Session 共享。</p>
+<pre><code class="prism language-java"><span class="token comment">// 1. 引入 Redis 依赖（Maven）</span>
+<span class="token generics"><span class="token punctuation">&lt;</span>dependency<span class="token punctuation">&gt;</span></span>
+    <span class="token generics"><span class="token punctuation">&lt;</span>groupId<span class="token punctuation">&gt;</span></span>org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>boot<span class="token operator">&lt;</span><span class="token operator">/</span>groupId<span class="token operator">&gt;</span>
+    <span class="token generics"><span class="token punctuation">&lt;</span>artifactId<span class="token punctuation">&gt;</span></span>spring<span class="token operator">-</span>boot<span class="token operator">-</span>starter<span class="token operator">-</span>data<span class="token operator">-</span>redis<span class="token operator">&lt;</span><span class="token operator">/</span>artifactId<span class="token operator">&gt;</span>
+<span class="token operator">&lt;</span><span class="token operator">/</span>dependency<span class="token operator">&gt;</span>
+
+<span class="token comment">// 2. 配置 Redis 存储 Session（application.yml）</span>
+spring<span class="token operator">:</span>
+  session<span class="token operator">:</span>
+    store<span class="token operator">-</span>type<span class="token operator">:</span> redis # <span class="token class-name">Session</span> 存储到 <span class="token class-name">Redis</span>
+    redis<span class="token operator">:</span>
+      namespace<span class="token operator">:</span> spring<span class="token operator">:</span>session # <span class="token class-name">Redis</span> 中 <span class="token class-name">Session</span> 的命名空间
+      timeout<span class="token operator">:</span> <span class="token number">3600</span> # <span class="token class-name">Session</span> 过期时间（<span class="token number">1</span>小时）
+  redis<span class="token operator">:</span>
+    host<span class="token operator">:</span> <span class="token number">127.0</span><span class="token number">.0</span><span class="token number">.1</span>
+    port<span class="token operator">:</span> <span class="token number">6379</span>
+    password<span class="token operator">:</span> <span class="token number">123456</span>
+
+<span class="token comment">// 3. 登录接口（无需修改，Spring 自动将 Session 存储到 Redis）</span>
+<span class="token annotation punctuation">@RequestMapping</span><span class="token punctuation">(</span><span class="token string">"/login"</span><span class="token punctuation">)</span>
+<span class="token keyword">public</span> <span class="token class-name">Result</span> <span class="token function">login</span><span class="token punctuation">(</span><span class="token class-name">UserLoginDTO</span> loginDTO<span class="token punctuation">,</span> <span class="token class-name">HttpSession</span> session<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token class-name">User</span> user <span class="token operator">=</span> userService<span class="token punctuation">.</span><span class="token function">login</span><span class="token punctuation">(</span>loginDTO<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    session<span class="token punctuation">.</span><span class="token function">setAttribute</span><span class="token punctuation">(</span><span class="token string">"loginUser"</span><span class="token punctuation">,</span> user<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">return</span> <span class="token class-name">Result</span><span class="token punctuation">.</span><span class="token function">success</span><span class="token punctuation">(</span><span class="token string">"登录成功"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">// 4. 验证登录态（无需修改，Spring 自动从 Redis 中获取 Session）</span>
+<span class="token annotation punctuation">@Override</span>
+<span class="token keyword">public</span> <span class="token keyword">boolean</span> <span class="token function">preHandle</span><span class="token punctuation">(</span><span class="token class-name">HttpServletRequest</span> request<span class="token punctuation">,</span> <span class="token class-name">HttpServletResponse</span> response<span class="token punctuation">,</span> <span class="token class-name">Object</span> handler<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">Exception</span> <span class="token punctuation">{</span>
+    <span class="token class-name">HttpSession</span> session <span class="token operator">=</span> request<span class="token punctuation">.</span><span class="token function">getSession</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>session <span class="token operator">==</span> <span class="token keyword">null</span> <span class="token operator">||</span> session<span class="token punctuation">.</span><span class="token function">getAttribute</span><span class="token punctuation">(</span><span class="token string">"loginUser"</span><span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        response<span class="token punctuation">.</span><span class="token function">sendRedirect</span><span class="token punctuation">(</span><span class="token string">"/login"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+</code></pre>
+<p>核心原理：Spring 会自动将 Session 序列化后存储到 Redis 中，Session ID 作为 Redis 的 Key，Session 对象作为 Value；所有节点都从 Redis 中获取 Session，从而实现共享。</p>
+<h2><a id="Cookie__Session__402"></a>六、避坑指南：Cookie 与 Session 常见问题及解决方案</h2>
+<p>开发中，Cookie 和 Session 很容易出现各种问题，这里整理了 6 个最常见的坑，给出具体的解决方案，帮你快速定位和解决问题。</p>
+<h3><a id="61_1Cookie__Cookie_406"></a>6.1 坑1：Cookie 不生效，客户端无法携带 Cookie</h3>
+<p>常见原因及解决方案：</p>
+<ul>
+<li>
+<p>原因1：Cookie 的 Path 设置错误（比如设置为 /api，而请求路径是 /index，浏览器不会携带 Cookie）；<br>
+解决方案：将 Path 设置为 ，让所有路径都能访问该 Cookie。</p>
+</li>
+<li>
+<p>原因2：Cookie 的 Domain 设置错误（比如设置为 a.example.com，而请求域名是 b.example.com，浏览器不会携带 Cookie）；<br>
+解决方案：设置正确的域名，或不设置 Domain（默认是当前请求的域名）。</p>
+</li>
+<li>
+<p>原因3：Cookie 设置了 Secure=true，但请求是 HTTP 协议（不是 HTTPS）；<br>
+解决方案：要么改为 HTTPS 协议，要么去掉 Secure=true（开发环境可临时去掉，生产环境建议保留）。</p>
+</li>
+<li>
+<p>原因4：跨域请求时，未设置 CORS 允许 Cookie 传递；<br>
+解决方案：后端设置 CORS 配置，允许携带 Cookie（Access-Control-Allow-Credentials: true），前端请求时设置 withCredentials: true。</p>
+</li>
+</ul>
+<h3><a id="62_2Session__422"></a>6.2 坑2：Session 过期太快，登录频繁失效</h3>
+<p>常见原因及解决方案：</p>
+<ul>
+<li>
+<p>原因1：Session 过期时间设置太短（比如设置为 5 分钟）；<br>
+解决方案：根据业务需求，合理设置过期时间（比如 1 小时、2 小时）。</p>
+</li>
+<li>
+<p>原因2：服务器重启后，Session 丢失（Session 存储在内存中）；<br>
+解决方案：将 Session 存储到 Redis 等持久化介质中，避免服务器重启后 Session 丢失。</p>
+</li>
+<li>
+<p>原因3：客户端 Cookie 过期时间与 Session 过期时间不一致（比如 Session 过期时间 1 小时，Cookie 过期时间 10 分钟）；<br>
+解决方案：让 Cookie 的过期时间大于或等于 Session 的过期时间，确保 Session 未过期时，Cookie 依然有效。</p>
+</li>
+</ul>
+<h3><a id="63_3Cookie__435"></a>6.3 坑3：Cookie 被篡改，导致安全问题</h3>
+<p>常见原因：Cookie 存储在客户端，可被客户端手动修改（比如修改 Cookie 中的用户 ID、权限信息），导致身份伪造、权限越权等问题。</p>
+<p>解决方案：</p>
+<ul>
+<li>
+<p>敏感信息不存储在 Cookie 中（比如用户密码、权限等级），敏感信息存储在 Session 中；</p>
+</li>
+<li>
+<p>对 Cookie 中的信息进行加密（比如前面“记住密码”场景中的加密处理），防止篡改；</p>
+</li>
+<li>
+<p>设置 Cookie 的 HttpOnly=true，禁止客户端 JS 访问 Cookie，防止 XSS 攻击篡改 Cookie。</p>
+</li>
+</ul>
+<h3><a id="64_4_Session__447"></a>6.4 坑4：分布式系统中 Session 共享失败</h3>
+<p>常见原因及解决方案：</p>
+<ul>
+<li>
+<p>原因1：Session 存储在单个节点的内存中，未使用分布式缓存；<br>
+解决方案：将 Session 存储到 Redis 等分布式缓存中，所有节点共享。</p>
+</li>
+<li>
+<p>原因2：Redis 配置错误（比如主机、端口错误，或命名空间不一致）；<br>
+解决方案：检查 Redis 配置，确保所有节点连接同一个 Redis，且命名空间一致。</p>
+</li>
+<li>
+<p>原因3：Session 序列化失败（比如 Session 中存储了不可序列化的对象）；<br>
+解决方案：确保 Session 中存储的对象实现 Serializable 接口，或使用 JSON 序列化方式。</p>
+</li>
+</ul>
+<h3><a id="65_5Session__460"></a>6.5 坑5：跨域请求时，Session 失效</h3>
+<p>原因：跨域请求时，浏览器默认不会携带 Cookie（包含 Session ID），导致服务器无法获取 Session ID，从而认为用户未登录。</p>
+<p>解决方案：</p>
+<ul>
+<li>
+<p>后端：设置 CORS 配置，允许携带 Cookie（Access-Control-Allow-Credentials: true），同时设置 Access-Control-Allow-Origin 为具体的域名（不能是 *）；</p>
+</li>
+<li>
+<p>前端：请求时设置 withCredentials: true（比如 Axios 中设置 axios.defaults.withCredentials = true）。</p>
+</li>
+</ul>
+<h3><a id="66_6Cookie__470"></a>6.6 坑6：Cookie 数量或大小超出限制</h3>
+<p>原因：浏览器对 Cookie 有数量限制（一个域名最多存储 50 条左右）和大小限制（单条不超过 4KB），超出限制后，Cookie 会被自动删除。</p>
+<p>解决方案：</p>
+<ul>
+<li>
+<p>减少 Cookie 的数量，只存储必要的信息（比如只存储 Session ID，其他信息存储在 Session 中）；</p>
+</li>
+<li>
+<p>压缩 Cookie 中的信息，避免体积过大；</p>
+</li>
+<li>
+<p>对于不需要长期存储的信息，使用内存 Cookie（不设置过期时间），关闭浏览器后自动删除。</p>
+</li>
+</ul>
+<h2><a id="_482"></a>七、总结</h2>
+<p>Cookie 和 Session 是 Web 开发中维持用户状态的核心技术，二者协同工作，缺一不可。总结一下核心要点：</p>
+<ol>
+<li>
+<p>本质区别：Cookie 存客户端，Session 存服务器；Cookie 传 Session ID，Session 存敏感信息；</p>
+</li>
+<li>
+<p>工作流程：客户端请求 → 服务器创建 Session 和 Session ID → 服务器将 Session ID 封装到 Cookie 发送给客户端 → 客户端后续请求携带 Cookie → 服务器通过 Session ID 找到 Session；</p>
+</li>
+<li>
+<p>实战建议：敏感信息存 Session，非敏感信息存 Cookie；生产环境用 Redis 存储 Session，实现分布式共享；</p>
+</li>
+<li>
+<p>避坑关键：注意 Cookie 的 Path、Domain、HttpOnly、Secure 配置；确保 Session 过期时间合理；跨域场景需配置 CORS 允许 Cookie 传递。</p>
+</li>
+</ol>
+<p>掌握 Cookie 和 Session 的原理、区别和实战技巧，不仅能解决开发中的常见问题，还能在面试中脱颖而出。希望这篇万字干货，能帮你彻底搞懂 Cookie 和 Session，在开发中少走弯路！</p>
+<p>最后，关注我，解锁更多后端干货！</p>
+</div>
+</body>
+
+</html>

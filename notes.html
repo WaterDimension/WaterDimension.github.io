@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>笔记 · frank</title>
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body data-page="notes">
+  <header class="site-header"></header>
+
+  <main>
+    <section class="page-intro">
+      <div class="container">
+        <div class="crumb">Notes</div>
+        <h1>技术笔记</h1>
+        <p>包括 Java 后端、Spring 全家桶、Redis、MySQL、计算机网络、算法模板等主题，按分类整理。</p>
+      </div>
+    </section>
+
+    <section class="block" style="padding-top:24px">
+      <div class="container">
+        <input class="searchbar" id="search" type="search" placeholder="🔍 搜索标题 / 摘要 / 分类" />
+        <div class="filters" id="cat-filters"></div>
+        <div class="grid notes" id="notes"></div>
+        <div class="empty" id="empty" style="display:none">没有匹配的笔记。</div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer"></footer>
+
+  <script src="assets/main.js"></script>
+  <script>
+    (async function () {
+      const notes = await loadJSON("data/notes.json");
+      const grid = document.getElementById("notes");
+      const empty = document.getElementById("empty");
+      const search = document.getElementById("search");
+      const catBox = document.getElementById("cat-filters");
+
+      const cats = Array.from(new Set(notes.map(n => n.category))).sort();
+      let activeCat = "全部";
+      let q = "";
+
+      function renderCats() {
+        const all = ["全部", ...cats];
+        catBox.innerHTML = all.map(c =>
+          `<button class="chip ${c === activeCat ? "on" : ""}" data-cat="${escapeHtml(c)}">${escapeHtml(c)}<span style="opacity:.5;margin-left:6px">${
+            c === "全部" ? notes.length : notes.filter(n => n.category === c).length
+          }</span></button>`
+        ).join("");
+        catBox.querySelectorAll(".chip").forEach(b => {
+          b.addEventListener("click", () => {
+            activeCat = b.dataset.cat;
+            renderCats();
+            render();
+          });
+        });
+      }
+
+      function render() {
+        const filtered = notes.filter(n => {
+          if (activeCat !== "全部" && n.category !== activeCat) return false;
+          if (q) {
+            const blob = (n.title + " " + (n.summary || "") + " " + n.category).toLowerCase();
+            if (!blob.includes(q.toLowerCase())) return false;
+          }
+          return true;
+        });
+        empty.style.display = filtered.length ? "none" : "block";
+        grid.innerHTML = filtered.map(n => `
+          <a class="card note-card" href="note.html?id=${encodeURIComponent(n.id)}">
+            <span class="cat">${escapeHtml(n.category)}</span>
+            <h3>${escapeHtml(n.title)}</h3>
+            <p class="summary">${escapeHtml(n.summary || "")}</p>
+            <div class="meta">
+              <span>${n.kind === "md" ? "📝 Markdown" : "📄 HTML"}</span>
+              <span>${(n.size / 1024).toFixed(1)} KB</span>
+            </div>
+          </a>
+        `).join("");
+      }
+
+      search.addEventListener("input", e => { q = e.target.value.trim(); render(); });
+      renderCats();
+      render();
+    })();
+  </script>
+</body>
+</html>

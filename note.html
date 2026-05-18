@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>笔记 · frank</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/atom-one-light.min.css" />
+</head>
+<body data-page="notes">
+  <header class="site-header"></header>
+
+  <main>
+    <div class="container">
+      <div class="note-shell">
+        <aside class="note-toc" id="toc-host">
+          <div class="toc-title">目录</div>
+          <div id="toc"></div>
+        </aside>
+        <article class="note-content">
+          <a class="note-back" href="notes.html">← 返回笔记列表</a>
+          <div class="note-meta" id="meta"></div>
+          <h1 id="title">加载中…</h1>
+          <div id="body" class="markdown-body"></div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer"></footer>
+
+  <script src="assets/main.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/common.min.js"></script>
+  <script>
+    function getId() {
+      const u = new URL(location.href);
+      return u.searchParams.get("id");
+    }
+
+    function buildTOC(container) {
+      const toc = document.getElementById("toc");
+      const headings = container.querySelectorAll("h2, h3");
+      if (headings.length < 2) {
+        document.getElementById("toc-host").style.display = "none";
+        return;
+      }
+      const items = [];
+      headings.forEach((h, i) => {
+        const id = "h-" + i;
+        h.id = id;
+        items.push(`<a href="#${id}" class="${h.tagName.toLowerCase()}">${escapeHtml(h.textContent)}</a>`);
+      });
+      toc.innerHTML = items.join("");
+      // active section on scroll
+      const links = toc.querySelectorAll("a");
+      const map = new Map();
+      links.forEach(a => map.set(a.getAttribute("href").slice(1), a));
+      const obs = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          const link = map.get(e.target.id);
+          if (!link) return;
+          if (e.isIntersecting) {
+            links.forEach(l => l.classList.remove("active"));
+            link.classList.add("active");
+          }
+        });
+      }, { rootMargin: "-30% 0px -65% 0px" });
+      headings.forEach(h => obs.observe(h));
+    }
+
+    (async function () {
+      const id = getId();
+      if (!id) { document.getElementById("title").textContent = "缺少笔记 id"; return; }
+
+      const notes = await loadJSON("data/notes.json");
+      const note = notes.find(n => n.id === id);
+      if (!note) { document.getElementById("title").textContent = "未找到这篇笔记"; return; }
+
+      document.title = `${note.title} · 笔记 · frank`;
+      document.getElementById("title").textContent = note.title;
+      document.getElementById("meta").innerHTML = `
+        <span class="cat">${escapeHtml(note.category)}</span>
+        <span>${note.kind === "md" ? "Markdown" : "HTML"}</span>
+        <span>${(note.size / 1024).toFixed(1)} KB</span>
+      `;
+
+      const path = `notes/${note.file}`;
+      const body = document.getElementById("body");
+
+      if (note.kind === "md") {
+        const md = await fetch(path).then(r => r.text());
+        marked.setOptions({
+          gfm: true,
+          breaks: false,
+          highlight(code, lang) {
+            try {
+              if (lang && hljs.getLanguage(lang)) return hljs.highlight(code, { language: lang }).value;
+              return hljs.highlightAuto(code).value;
+            } catch { return code; }
+          },
+        });
+        const raw = marked.parse(md);
+        body.innerHTML = DOMPurify.sanitize(raw, { ADD_ATTR: ["target", "rel"] });
+        body.querySelectorAll("pre code").forEach(b => hljs.highlightElement(b));
+        // open external links in a new tab
+        body.querySelectorAll("a[href^='http']").forEach(a => {
+          a.target = "_blank"; a.rel = "noopener";
+        });
+        buildTOC(body);
+      } else {
+        // HTML notes were exported with their own external stylesheet (stackedit etc).
+        // Render in an iframe to keep their styles intact without conflicting with site styles.
+        const iframe = document.createElement("iframe");
+        iframe.className = "note-iframe";
+        iframe.src = path;
+        iframe.title = note.title;
+        iframe.loading = "lazy";
+        body.appendChild(iframe);
+        // Auto-resize the iframe to fit its content height
+        iframe.addEventListener("load", () => {
+          try {
+            const doc = iframe.contentDocument;
+            const fit = () => {
+              if (!doc || !doc.body) return;
+              iframe.style.height = (doc.body.scrollHeight + 40) + "px";
+            };
+            fit();
+            // Re-fit when images load
+            doc.querySelectorAll("img").forEach(img => {
+              if (!img.complete) img.addEventListener("load", fit);
+            });
+            // build TOC from inside the iframe
+            const headings = doc.querySelectorAll("h2, h3");
+            const toc = document.getElementById("toc");
+            if (headings.length >= 2) {
+              const items = [];
+              headings.forEach((h, i) => {
+                const id = "ifh-" + i;
+                h.id = id;
+                items.push(`<a href="javascript:void(0)" data-target="${id}" class="${h.tagName.toLowerCase()}">${escapeHtml(h.textContent)}</a>`);
+              });
+              toc.innerHTML = items.join("");
+              toc.querySelectorAll("a").forEach(a => {
+                a.addEventListener("click", () => {
+                  const t = doc.getElementById(a.dataset.target);
+                  if (!t) return;
+                  const top = t.getBoundingClientRect().top + iframe.offsetTop + window.scrollY - 80;
+                  window.scrollTo({ top, behavior: "smooth" });
+                });
+              });
+            } else {
+              document.getElementById("toc-host").style.display = "none";
+            }
+            // Make the iframe reflow after font loading / window resize
+            window.addEventListener("resize", fit);
+          } catch (e) {
+            console.warn("iframe TOC build failed", e);
+          }
+        });
+      }
+    })();
+  </script>
+</body>
+</html>
