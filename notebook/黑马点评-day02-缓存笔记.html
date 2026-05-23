@@ -1,0 +1,643 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>黑马点评-day02-缓存笔记</title>
+  <link rel="stylesheet" href="https://stackedit.io/style.css" />
+</head>
+
+<body class="stackedit">
+  <div class="stackedit__html"><h1><a id="_0"></a>认识缓存</h1>
+<p><img src="https://i-blog.csdnimg.cn/direct/ad1d48e783d94011a82cde891dad32bb.png" alt="在这里插入图片描述"></p>
+<h2><a id="_3"></a>什么是缓存？</h2>
+<p>缓存是一种具备<strong>高效读写能力</strong>的数据暂存区域，用于临时存储高频访问的数据，以提升访问效率。</p>
+<hr>
+<h2><a id="_8"></a>缓存的作用</h2>
+<ul>
+<li><strong>降低后端负载</strong>：减少对数据库等底层存储的直接访问压力，避免高并发场景下后端服务被打垮。</li>
+<li><strong>提高服务读写响应速度</strong>：将数据从低速存储（如数据库）迁移到高速缓存（如Redis），显著缩短接口响应时间，提升用户体验。</li>
+</ul>
+<hr>
+<h2><a id="_14"></a>缓存的成本</h2>
+<ul>
+<li><strong>开发成本</strong>：需要额外编写缓存读写、更新、失效等逻辑，增加代码复杂度。</li>
+<li><strong>运维成本</strong>：需要部署、监控缓存服务（如Redis集群），保障其高可用与稳定性。</li>
+<li><strong>一致性问题</strong>：缓存与数据库数据可能存在短暂不一致，需要设计合理的更新策略（如缓存更新模式、过期时间）来保证数据最终一致。</li>
+</ul>
+<hr>
+<h1><a id="_22"></a>一、缓存穿透代码解析与疑问解答</h1>
+<h1><a id="_24"></a>思路</h1>
+<p><img src="https://i-blog.csdnimg.cn/direct/67869ea5970b417c8cb107844cfab48c.png" alt="在这里插入图片描述"></p>
+<p><img src="https://i-blog.csdnimg.cn/direct/2c5673eddfa24e2b8d9c66f86ec93ba2.png" alt="在这里插入图片描述"></p>
+<h1><a id="_28"></a>解决方案（被动防御）</h1>
+<ol>
+<li>缓存null:<br>
+这样查到缓存，就不会打到数据库了</li>
+<li>布隆过滤器：<br>
+通过二进制存储数据库中某些信息的hash值判断是否存在， 但这种准确度不确定</li>
+</ol>
+<h2><a id="_35"></a>原始代码</h2>
+<pre><code class="prism language-java"><span class="token comment">//缓存穿透</span>
+<span class="token keyword">private</span> <span class="token class-name">Shop</span> <span class="token function">queryWithPassThrough</span><span class="token punctuation">(</span><span class="token class-name">Long</span> id<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token comment">//从Redis查询店铺缓存</span>
+    <span class="token class-name">String</span> key  <span class="token operator">=</span> <span class="token constant">CACHE_SHOP_KEY</span> <span class="token operator">+</span> id<span class="token punctuation">;</span>
+    <span class="token class-name">String</span> shopJson <span class="token operator">=</span> stringRedisTemplate<span class="token punctuation">.</span><span class="token function">opsForValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">//1.缓存命中</span>
+    <span class="token keyword">if</span><span class="token punctuation">(</span><span class="token class-name">StrUtil</span><span class="token punctuation">.</span><span class="token function">isNotBlank</span><span class="token punctuation">(</span>shopJson<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+       <span class="token comment">//1.1 缓存中的是店铺信息</span>
+        <span class="token keyword">return</span> <span class="token class-name">JSONUtil</span><span class="token punctuation">.</span><span class="token function">toBean</span><span class="token punctuation">(</span>shopJson<span class="token punctuation">,</span> <span class="token class-name">Shop</span><span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+       <span class="token comment">//1.2命中为空</span>
+    <span class="token keyword">if</span><span class="token punctuation">(</span>shopJson <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    
+    <span class="token comment">//2.未命中</span>
+    <span class="token comment">//2.1查询数据库</span>
+    <span class="token class-name">Shop</span> shop <span class="token operator">=</span> <span class="token function">getById</span><span class="token punctuation">(</span>id<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">//2.2结果不存在</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>shop <span class="token operator">==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment">//2.2.1返回空值到redis，避免穿透</span>
+        stringRedisTemplate<span class="token punctuation">.</span><span class="token function">opsForValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span>key<span class="token punctuation">,</span> <span class="token string">""</span><span class="token punctuation">,</span> <span class="token constant">CACHE_NULL_TTL</span><span class="token punctuation">,</span> <span class="token class-name">TimeUnit</span><span class="token punctuation">.</span><span class="token constant">MINUTES</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment">//2.3能查到，写入缓存</span>
+    stringRedisTemplate<span class="token punctuation">.</span><span class="token function">opsForValue</span><span class="token punctuation">(</span><span class="token number">0.</span><span class="token function">set</span><span class="token punctuation">(</span>key<span class="token punctuation">,</span> <span class="token class-name">JOSNUtil</span><span class="token punctuation">.</span><span class="token function">toJsonStr</span><span class="token punctuation">(</span>shop<span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token constant">CACHE_SHOP_TTL</span><span class="token punctuation">,</span><span class="token class-name">TimeUnit</span><span class="token punctuation">.</span><span class="token constant">MINUTES</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">//3.返回店铺信息</span>
+    <span class="token keyword">return</span> shop<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h2><a id="_68"></a>核心疑问解答</h2>
+<h3><a id="112__ifshopJson__null____69"></a>疑问1：1.2 命中为空 <code>if(shopJson != null)</code> 能否改成 <code>== ""</code></h3>
+<h4><a id="_70"></a>前置说明</h4>
+<p>Hutool 工具类 <code>StrUtil.isBlank()</code> 判定规则：<br>
+包含<strong>空字符""</strong>、<strong>空白字符串（length &gt; 0）"        "</strong>、<strong>null</strong> 三种情况均返回 <code>true</code>。所以只要判断了 !=null, 那就只能等于<strong>空字符串</strong>了。</p>
+<h4><a id="____74"></a>直接写 <code>== ""</code> 的问题</h4>
+<p>Java 中字符串相等判断不能用 <code>==</code>：</p>
+<ul>
+<li><code>==</code> 比较的是对象内存地址，而非字符串内容；</li>
+<li><code>equals()</code> 方法才是用于比较字符串内容是否相等的正确方式。</li>
+</ul>
+<h4><a id="_79"></a>推荐写法</h4>
+<pre><code class="prism language-java"><span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token string">""</span><span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>shopJson<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> 
+    <span class="token comment">// 用""调用equals，避免shopJson为null时触发空指针异常</span>
+    <span class="token keyword">return</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h3><a id="223__87"></a>疑问2：2.3 写入缓存时为什么要设置过期时间</h3>
+<p>给缓存设置过期时间（TTL）是缓存设计的核心原则，主要解决以下问题：</p>
+<h4><a id="1_90"></a>（1）防止缓存与数据库数据不一致（缓存脏数据）</h4>
+<p>店铺信息（如价格、营业状态）可能在数据库中更新，若缓存永久有效，更新后缓存中的旧数据会持续返回，导致用户看到错误信息。设置过期时间后，缓存到期自动失效，下次请求会从数据库加载最新数据并重新缓存。</p>
+<h4><a id="2_Redis__93"></a>（2）防止 Redis 内存溢出</h4>
+<p>若所有缓存永久保存，Redis 内存会持续增长，最终触发内存淘汰策略（可能删除重要缓存）或直接内存溢出。设置过期时间可自动清理不再使用的缓存，控制 Redis 内存占用。</p>
+<h4><a id="3_96"></a>（3）兼容缓存击穿的后续防护（可选）</h4>
+<p>过期时间是实现“缓存击穿”防护（如互斥锁、逻辑过期）的基础，即使当前代码仅处理缓存穿透，设置过期时间也为后续扩展防护策略预留空间。</p>
+<h2><a id="_99"></a>总结</h2>
+<ol>
+<li><code>if(shopJson != null)</code> 不建议直接改 <code>== ""</code>，推荐使用 <code>"" .equals(shopJson)</code> 避免空指针且精准匹配空字符串；</li>
+<li>缓存设置过期时间核心目的是防止数据不一致、控制 Redis 内存占用，同时兼容后续缓存击穿防护扩展。</li>
+</ol>
+<br>
+<h1><a id="_105"></a>二、缓存雪崩解析</h1>
+<p>缓存雪崩是指在同一时段大量的缓存key同时失效或者Redis服务宕机，导致大量请求到达数据库，带来巨大压力。<br>
+<img src="https://i-blog.csdnimg.cn/direct/d517b47e7fe44c269ce0473a43bcb186.png" alt="在这里插入图片描述"></p>
+<h2><a id="_109"></a>解决方案：</h2>
+<ul>
+<li>给不同的Key的TTL添加随机值</li>
+<li>利用Redis集群提高服务的可用性</li>
+<li>给缓存业务添加降级限流策略</li>
+<li>给业务添加多级缓存<br>
+<br></li>
+</ul>
+<h1><a id="_116"></a>三、缓存击穿代码解析与疑问解答</h1>
+<p><img src="https://i-blog.csdnimg.cn/direct/646301204deb4dc7bc7301c9d7d6b9b9.png" alt="在这里插入图片描述"><br>
+<img src="https://i-blog.csdnimg.cn/direct/4c0209aa1a1e49579fd27d8dc505c1d0.png" alt="在这里插入图片描述"></p>
+<h1><a id="_121"></a>思路</h1>
+<p><strong>互斥锁方案</strong>：由于保证了互斥性，所以数据一致，且实现简单，因为仅仅只需要加一把锁而已，也没其他的事情需要操心，所以没有额外的内存消耗，缺点在于有锁就有死锁问题的发生，且只能串行执行性能肯定受到影响</p>
+<p><strong>逻辑过期方案：</strong> 线程读取过程中不需要等待，性能好，有一个额外的线程持有锁去进行重构数据，但是在重构数据完成前，其他的线程只能返回之前的数据，且实现起来麻烦</p>
+<br>
+
+<table>
+<thead>
+<tr>
+<th>解决方案</th>
+<th>优点</th>
+<th>缺点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>互斥锁</strong></td>
+<td>- 没有额外的内存消耗<br>- 保证一致性<br>- 实现简单</td>
+<td>- 线程需要等待，性能受影响<br>- 可能有死锁风险</td>
+</tr>
+<tr>
+<td><strong>逻辑过期</strong></td>
+<td>- 线程无需等待，性能较好</td>
+<td>- 不保证一致性<br>- 有额外内存消耗<br>- 实现复杂</td>
+</tr>
+</tbody>
+</table><h2><a id="1_135"></a>1.互斥锁解决</h2>
+<p><img src="https://i-blog.csdnimg.cn/direct/93357a3c95d64c28824abce0881aeef2.png" alt="在这里插入图片描述"></p>
+<h2><a id="_137"></a>原始代码</h2>
+<pre><code class="prism language-java"><span class="token keyword">private</span> <span class="token keyword">boolean</span> <span class="token function">tryGetLock</span><span class="token punctuation">(</span><span class="token class-name">String</span> key<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token class-name">Boolean</span> flag <span class="token operator">=</span> stringRedisTemplate<span class="token punctuation">.</span><span class="token function">opsForValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">setIfAbsent</span><span class="token punctuation">(</span>key<span class="token punctuation">,</span> <span class="token string">"1"</span><span class="token punctuation">,</span> <span class="token number">10</span><span class="token punctuation">,</span> <span class="token class-name">TimeUnit</span><span class="token punctuation">.</span><span class="token constant">SECONDS</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">return</span> <span class="token class-name">BooleanUtil</span><span class="token punctuation">.</span><span class="token function">isTrue</span><span class="token punctuation">(</span>flag<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">private</span> <span class="token keyword">void</span> <span class="token function">unlock</span><span class="token punctuation">(</span><span class="token class-name">String</span> key<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    stringRedisTemplate<span class="token punctuation">.</span><span class="token function">delete</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<pre><code class="prism language-java"><span class="token comment">//互斥锁解决击穿</span>
+<span class="token keyword">private</span> <span class="token class-name">Shop</span> <span class="token function">queryWithMutex</span><span class="token punctuation">(</span><span class="token class-name">Long</span> id<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	<span class="token comment">//1.从redis中获取店铺缓存</span>
+    <span class="token class-name">String</span> key <span class="token operator">=</span> <span class="token constant">CHCAHE_SHOP_KEY</span> <span class="token operator">+</span> id<span class="token punctuation">;</span>
+    <span class="token class-name">String</span> shopJson <span class="token operator">=</span>  stringRedisTemplate<span class="token punctuation">.</span><span class="token function">opsForValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    
+    <span class="token comment">//2.判断缓存是否命中</span>
+    <span class="token comment">//2.1缓存命中</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token class-name">StrUtil</span><span class="token punctuation">.</span><span class="token function">isNotBlank</span><span class="token punctuation">(</span>shopJson<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">[</span>
+        <span class="token keyword">return</span> <span class="token class-name">JSONUtil</span><span class="token punctuation">.</span><span class="token function">toBean</span><span class="token punctuation">(</span>shopJson<span class="token punctuation">,</span> <span class="token class-name">Shop</span><span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">]</span>
+    <span class="token comment">//2.2命中的为空值(防穿透)</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>shopJson <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        reutrn <span class="token keyword">null</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment">//3.缓存未命中，尝试获取互斥锁</span>
+	<span class="token class-name">String</span> lockKey <span class="token operator">=</span> <span class="token constant">LOCK_SHOP_KEY</span> <span class="token operator">+</span> id<span class="token punctuation">;</span>
+    <span class="token keyword">boolean</span> lock <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+    <span class="token class-name">Shop</span> shop <span class="token operator">=</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+    <span class="token keyword">try</span> <span class="token punctuation">{</span>
+        lock <span class="token operator">=</span> <span class="token function">tryGetLock</span><span class="token punctuation">(</span>lockKey<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">//3.1获取失败, 休眠一会重试</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>lock<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token class-name">Thread</span><span class="token punctuation">.</span><span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">200</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+             <span class="token comment">// 苏醒后先查缓存，这时可能其他线程做完了，避免重复查库</span>
+   		    <span class="token class-name">String</span> cacheShop <span class="token operator">=</span> stringRedisTemplate<span class="token punctuation">.</span><span class="token function">opsForValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token class-name">StrUtil</span><span class="token punctuation">.</span><span class="token function">isNotBlank</span><span class="token punctuation">(</span>cacheShop<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+		        <span class="token keyword">return</span> <span class="token class-name">JSONUtil</span><span class="token punctuation">.</span><span class="token function">toBean</span><span class="token punctuation">(</span>cacheShop<span class="token punctuation">,</span> <span class="token class-name">Shop</span><span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		    <span class="token punctuation">}</span>
+            <span class="token keyword">return</span> <span class="token function">querWithMutex</span><span class="token punctuation">(</span>id<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">//重试</span>
+        <span class="token punctuation">}</span>
+        <span class="token comment">//3.2获取成功，查询数据库</span>
+        shop <span class="token operator">=</span> <span class="token function">getById</span><span class="token punctuation">(</span>id<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">//3.3.1数据库没查到</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>shop <span class="token operator">==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment">//防穿透，null写入redis</span>
+            stringRedisTemplate<span class="token punctuation">.</span><span class="token function">opForValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span>key<span class="token punctuation">,</span> <span class="token string">""</span><span class="token punctuation">,</span> <span class="token constant">CACHE_NULL_TTL</span><span class="token punctuation">,</span> <span class="token class-name">TimeUnit</span><span class="token punctuation">.</span><span class="token constant">MINUTES</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">return</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token comment">//3.3.2查到了，写入缓存</span>
+        stringRedisTemplate<span class="token punctuation">.</span><span class="token function">opsForValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span>key<span class="token punctuation">,</span> <span class="token class-name">JSONUtil</span><span class="token punctuation">.</span><span class="token function">toJsonStr</span><span class="token punctuation">(</span>shop<span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token constant">CACHE_SHOP_TTL</span><span class="token punctuation">,</span> <span class="token class-name">TimeUnit</span><span class="token punctuation">.</span><span class="token constant">MINUTES</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span><span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">InterruptedException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">RuntimeException</span><span class="token punctuation">(</span>e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+        <span class="token comment">//释放锁</span>
+        <span class="token function">unlock</span><span class="token punctuation">(</span>lockKey<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">//4.返回店铺信息</span>
+        <span class="token keyword">return</span> shop<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h1><a id="_201"></a>核心问题解答</h1>
+<h2><a id="1__202"></a>1. 获取不到锁休眠苏醒后，获取到锁需注意的事项</h2>
+<p>休眠苏醒后重新竞争锁并成功，需重点关注以下3点：</p>
+<h3><a id="11__205"></a>1.1 再次检查缓存（核心）</h3>
+<p>休眠期间可能已有其他线程完成“查库+写缓存”操作，此时无需重复查询数据库，直接返回缓存数据即可：</p>
+<pre><code class="prism language-java"><span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>lock<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token class-name">Thread</span><span class="token punctuation">.</span><span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">200</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">// 苏醒后优先查缓存，避免重复查库</span>
+    <span class="token class-name">String</span> cacheShop <span class="token operator">=</span> stringRedisTemplate<span class="token punctuation">.</span><span class="token function">opsForValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token class-name">StrUtil</span><span class="token punctuation">.</span><span class="token function">isNotBlank</span><span class="token punctuation">(</span>cacheShop<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> <span class="token class-name">JSONUtil</span><span class="token punctuation">.</span><span class="token function">toBean</span><span class="token punctuation">(</span>cacheShop<span class="token punctuation">,</span> <span class="token class-name">Shop</span><span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">return</span> <span class="token function">queryWithMutex</span><span class="token punctuation">(</span>id<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 未命中缓存再重试</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h3><a id="12__219"></a>1.2 控制重试次数/超时时间</h3>
+<p>避免无限递归重试导致栈溢出，建议增加重试次数限制：</p>
+<pre><code class="prism language-java"><span class="token comment">// 重载方法，增加重试次数参数</span>
+<span class="token keyword">private</span> <span class="token class-name">Shop</span> <span class="token function">queryWithMutex</span><span class="token punctuation">(</span><span class="token class-name">Long</span> id<span class="token punctuation">,</span> <span class="token keyword">int</span> retryCount<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>retryCount <span class="token operator">&gt;=</span> <span class="token number">3</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment">// 最多重试3次</span>
+        <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">RuntimeException</span><span class="token punctuation">(</span><span class="token string">"获取锁超时，请稍后重试"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment">// ... 核心逻辑</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>lock<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token class-name">Thread</span><span class="token punctuation">.</span><span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">200</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> <span class="token function">queryWithMutex</span><span class="token punctuation">(</span>id<span class="token punctuation">,</span> retryCount <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 重试次数+1</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h3><a id="13__235"></a>1.3 锁的过期时间兜底</h3>
+<p>锁的10秒过期时间是死锁的兜底方案，但需保证<strong>业务执行时间 &lt; 锁过期时间</strong>（否则可能释放其他线程的锁）：</p>
+<ul>
+<li>若业务逻辑执行超过10秒，当前线程的锁已自动过期，此时释放锁可能误删其他线程持有的锁；</li>
+<li>建议根据实际业务耗时调整锁的过期时间（如调整为30秒）。</li>
+</ul>
+<h2><a id="2_stringRedisTemplateopsForValuesetIfAbsentkey_1_10_TimeUnitSECONDS__240"></a>2. <code>stringRedisTemplate.opsForValue().setIfAbsent(key, "1", 10, TimeUnit.SECONDS)</code> 详解</h2>
+<h3><a id="21__241"></a>2.1 函数作用</h3>
+<p>该方法等价于Redis原生命令 <code>SET NX + EX</code>，是实现分布式锁的核心原子操作：</p>
+<ul>
+<li>仅当 <code>key</code> <strong>不存在</strong> 时，才会设置 <code>key</code> 的值（保证锁的唯一性）；</li>
+<li>同时为 <code>key</code> 设置过期时间（10秒），避免业务异常导致死锁；</li>
+<li>整个操作是原子性的（判断key是否存在 + 设置值 + 设置过期时间一步完成），无并发安全问题。</li>
+</ul>
+<h3><a id="22__247"></a>2.2 参数说明</h3>
+
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>key</code></td>
+<td>分布式锁的唯一标识（如 <code>lock:shop:1</code>），区分不同资源的锁</td>
+</tr>
+<tr>
+<td><code>"1"</code></td>
+<td>锁的value值，仅作为占位符（无实际业务意义），可替换为任意字符串</td>
+</tr>
+<tr>
+<td><code>10</code></td>
+<td>过期时间数值，此处为10</td>
+</tr>
+<tr>
+<td><code>TimeUnit.SECONDS</code></td>
+<td>过期时间单位，此处为秒，即锁的有效期为10秒</td>
+</tr>
+</tbody>
+</table><h3><a id="23__255"></a>2.3 返回值</h3>
+<ul>
+<li><code>true</code>：<code>key</code> 不存在，设置成功（获取锁成功）；</li>
+<li><code>false</code>：<code>key</code> 已存在，设置失败（获取锁失败）。</li>
+</ul>
+<h3><a id="24_value_259"></a>2.4 扩展：value值优化（避免误释放锁）</h3>
+<p><code>"1"</code> 是无意义占位符，可替换为UUID（保证每个线程的value唯一），释放锁时校验value，避免误删其他线程的锁：</p>
+<pre><code class="prism language-java"><span class="token comment">// 获取锁时存储唯一UUID</span>
+<span class="token class-name">String</span> uuid <span class="token operator">=</span> <span class="token constant">UUID</span><span class="token punctuation">.</span><span class="token function">randomUUID</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">toString</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token class-name">Boolean</span> flag <span class="token operator">=</span> stringRedisTemplate<span class="token punctuation">.</span><span class="token function">opsForValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">setIfAbsent</span><span class="token punctuation">(</span>key<span class="token punctuation">,</span> uuid<span class="token punctuation">,</span> <span class="token number">10</span><span class="token punctuation">,</span> <span class="token class-name">TimeUnit</span><span class="token punctuation">.</span><span class="token constant">SECONDS</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// 释放锁时校验value是否匹配</span>
+<span class="token keyword">private</span> <span class="token keyword">void</span> <span class="token function">unlock</span><span class="token punctuation">(</span><span class="token class-name">String</span> key<span class="token punctuation">,</span> <span class="token class-name">String</span> uuid<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token class-name">String</span> value <span class="token operator">=</span> stringRedisTemplate<span class="token punctuation">.</span><span class="token function">opsForValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>uuid<span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>value<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment">// 仅释放当前线程持有的锁</span>
+        stringRedisTemplate<span class="token punctuation">.</span><span class="token function">delete</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h2><a id="1_275"></a>1.逻辑过期解决</h2>
+<p><img src="https://i-blog.csdnimg.cn/direct/feab6f6271334c2b8ea2f7f1004907e2.png" alt="在这里插入图片描述"></p>
+<pre><code class="prism language-java"><span class="token keyword">private</span> <span class="token keyword">boolean</span> <span class="token function">tryGetLock</span><span class="token punctuation">(</span><span class="token class-name">String</span> lockKey<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token class-name">Boolean</span> flag <span class="token operator">=</span> stringRedisTemplate<span class="token punctuation">.</span><span class="token function">opsForValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+            <span class="token punctuation">.</span><span class="token function">setIfAbsent</span><span class="token punctuation">(</span>lockKey<span class="token punctuation">,</span> <span class="token string">"1"</span><span class="token punctuation">,</span> <span class="token number">10</span><span class="token punctuation">,</span> <span class="token class-name">TimeUnit</span><span class="token punctuation">.</span><span class="token constant">SECONDS</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 锁超时10秒，防止死锁</span>
+    <span class="token keyword">return</span> <span class="token class-name">Boolean</span><span class="token punctuation">.</span><span class="token constant">TRUE</span><span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>flag<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">//释放互斥锁</span>
+<span class="token keyword">private</span> <span class="token keyword">void</span> <span class="token function">unlock</span><span class="token punctuation">(</span><span class="token class-name">String</span> lockKey<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    stringRedisTemplate<span class="token punctuation">.</span><span class="token function">delete</span><span class="token punctuation">(</span>lockKey<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<pre><code class="prism language-java"><span class="token annotation punctuation">@Data</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">RedisData</span> <span class="token punctuation">{</span>
+    <span class="token keyword">private</span> <span class="token class-name">LocalDateTime</span> expireTime<span class="token punctuation">;</span>
+    <span class="token keyword">private</span> <span class="token class-name">Object</span> data<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+</code></pre>
+<pre><code class="prism language-java">    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">saveShop2Redis</span><span class="token punctuation">(</span><span class="token class-name">Long</span> id<span class="token punctuation">,</span> <span class="token class-name">Long</span> expireSeconds<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">InterruptedException</span> <span class="token punctuation">{</span>
+        <span class="token comment">//1.查询店铺数据</span>
+        <span class="token class-name">Shop</span> shop <span class="token operator">=</span> <span class="token function">getById</span><span class="token punctuation">(</span>id<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">Thread</span><span class="token punctuation">.</span><span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">200</span><span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">//模拟重建缓存延迟</span>
+        <span class="token comment">//2.封装逻辑过期时间</span>
+        <span class="token class-name">RedisData</span> redisData <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">RedisData</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        redisData<span class="token punctuation">.</span><span class="token function">setData</span><span class="token punctuation">(</span>shop<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        redisData<span class="token punctuation">.</span><span class="token function">setExpireTime</span><span class="token punctuation">(</span><span class="token class-name">LocalDateTime</span><span class="token punctuation">.</span><span class="token function">now</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">plusSeconds</span><span class="token punctuation">(</span>expireSeconds<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">//3.写入redis</span>
+        stringRedisTemplate<span class="token punctuation">.</span><span class="token function">opsForValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span><span class="token constant">CACHE_SHOP_KEY</span> <span class="token operator">+</span> id<span class="token punctuation">,</span> <span class="token class-name">JSONUtil</span><span class="token punctuation">.</span><span class="token function">toJsonStr</span><span class="token punctuation">(</span>redisData<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+</code></pre>
+<pre><code class="prism language-java">
+<span class="token comment">//逻辑过期解决击穿</span>
+<span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">ExecutorService</span> <span class="token constant">CACHE_REBUILD_EXECTOR</span> <span class="token operator">=</span> <span class="token class-name">Executors</span><span class="token punctuation">.</span><span class="token function">newFixedThreadPool</span><span class="token punctuation">(</span><span class="token number">10</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">public</span> <span class="token class-name">Shop</span> <span class="token function">queryWithLogicalExpire</span><span class="token punctuation">(</span><span class="token class-name">Long</span> id<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	<span class="token class-name">String</span> key <span class="token operator">=</span> <span class="token constant">CACHE_SHOP_KEY</span> <span class="token operator">+</span> id<span class="token punctuation">;</span>
+    <span class="token comment">//1.从redis缓存</span>
+    <span class="token class-name">String</span> json <span class="token operator">=</span> stringRedisTemplate<span class="token punctuation">.</span><span class="token function">opsForValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">//2.判断是否存在</span>
+    <span class="token comment">//2.1未命中，直接返回</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token class-name">StrUtil</span><span class="token punctuation">.</span><span class="token function">isBlank</span><span class="token punctuation">(</span>json<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment">//3.命中，判断缓存是否过期</span>
+    <span class="token comment">//需要把json反序列化成对象</span>
+    <span class="token class-name">RedisData</span> redisData <span class="token operator">=</span> <span class="token class-name">JSONUtil</span><span class="token punctuation">.</span><span class="token function">toBean</span><span class="token punctuation">(</span>json<span class="token punctuation">,</span> <span class="token class-name">RedisData</span><span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token class-name">JSONObject</span> data <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token class-name">JSONObject</span><span class="token punctuation">)</span>redisData<span class="token punctuation">.</span><span class="token function">getData</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">//店铺信息</span>
+    <span class="token class-name">Shop</span> shop <span class="token operator">=</span> <span class="token class-name">JSONUtil</span><span class="token punctuation">.</span><span class="token function">toBean</span><span class="token punctuation">(</span>data<span class="token punctuation">,</span> <span class="token class-name">Shop</span><span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token class-name">LocalDateTime</span> expireTime <span class="token operator">=</span> redisData<span class="token punctuation">.</span><span class="token function">getExpireTime</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    
+    <span class="token comment">//4.判断是否过期</span>
+    <span class="token comment">//4.1没过期</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>expireTime<span class="token punctuation">.</span><span class="token function">isAfter</span><span class="token punctuation">(</span><span class="token class-name">LocalDateTime</span><span class="token punctuation">.</span><span class="token function">now</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> shop<span class="token punctuation">;</span>  
+    <span class="token punctuation">}</span>
+    <span class="token comment">//4.2过期, 重建缓存</span>
+    <span class="token comment">//5.获取互斥锁</span>
+    <span class="token class-name">String</span> lockKey <span class="token operator">=</span> <span class="token constant">LOCK_SHOP_KEY</span> <span class="token operator">+</span> id<span class="token punctuation">;</span>
+   	<span class="token keyword">boolean</span> isLock <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+    isLock <span class="token operator">=</span> <span class="token function">tryGetLock</span><span class="token punctuation">(</span>lockKey<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">//6.判断是否获取锁成功</span>
+    <span class="token comment">//6.1成功</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>isLock<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment">//开启独立线程， 实现缓存重建</span>
+        <span class="token comment">//注意获取锁成功后，应该再次检查缓存是否过期， 存在则无序重建</span>
+        <span class="token class-name">String</span> newJson <span class="token operator">=</span> stringRedisTemplate<span class="token punctuation">.</span><span class="token function">opsForValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token class-name">StrUtil</span><span class="token punctuation">.</span><span class="token function">isBlank</span><span class="token punctuation">(</span>newjson<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token class-name">RedisData</span> newRedisData <span class="token operator">=</span> <span class="token class-name">JSONUtil</span><span class="token punctuation">.</span><span class="token function">toBean</span><span class="token punctuation">(</span>newJson<span class="token punctuation">,</span> <span class="token class-name">RedisData</span><span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>expireTime<span class="token punctuation">.</span><span class="token function">isAfter</span><span class="token punctuation">(</span><span class="token class-name">LocalDateTime</span><span class="token punctuation">.</span><span class="token function">now</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment">// 如果新缓存未过期，说明已被其他线程重建，直接返回即可</span>
+            <span class="token class-name">JSONObject</span> newData <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token class-name">JSONObject</span><span class="token punctuation">)</span> newRedisData<span class="token punctuation">.</span><span class="token function">getData</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">//店铺信息</span>
+            <span class="token class-name">Shop</span> newShop <span class="token operator">=</span> <span class="token class-name">JSONUtil</span><span class="token punctuation">.</span><span class="token function">toBean</span><span class="token punctuation">(</span>newData<span class="token punctuation">,</span> <span class="token class-name">Shop</span><span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token keyword">return</span> newShop<span class="token punctuation">;</span>
+    	<span class="token punctuation">}</span>
+        <span class="token comment">//确认缓存过期，异步重建缓存</span>
+        <span class="token constant">CACHE_REBUILD_EXECTOR</span><span class="token punctuation">.</span><span class="token function">submit</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">-&gt;</span><span class="token punctuation">{</span>
+                <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                    <span class="token comment">//重建缓存</span>
+                	<span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">saveShop2Redis</span><span class="token punctuation">(</span>id<span class="token punctuation">,</span><span class="token number">20L</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Exception</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">RuntimeException</span><span class="token punctuation">(</span>e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+                    <span class="token comment">//释放锁</span>
+                    <span class="token function">unlock</span><span class="token punctuation">(</span>lockKey<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>    
+    <span class="token punctuation">}</span>
+   <span class="token comment">//6.3失败，返回过期信息</span>
+   <span class="token keyword">return</span> shop<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h1><a id="_374"></a>核心问题解答</h1>
+<ol>
+<li><code>JSONObject data = (JSONObject)redisData.getData();</code> 为什么用JSONObject做强转？redisData.getData()获取的是什么类型？<br>
+1.1 强转JSONObject的原因<br>
+<code>RedisData</code>类中<code>data</code>字段定义为<code>Object</code>类型，而Redis中存储的是JSON格式的字符串，反序列化后默认会被<code>JSONUtil.toBean()</code>解析为<code>JSONObject</code>对象（而非直接的<code>Shop</code>对象），因此需要强转后再二次解析为<code>Shop</code>对象：</li>
+</ol>
+<ul>
+<li>第一步：把Redis中整个JSON字符串反序列化为<code>RedisData</code>对象（包含<code>expireTime</code>和<code>data</code>）；</li>
+<li>第二步：<code>redisData.getData()</code>拿到的是<code>RedisData</code>中<code>data</code>字段对应的JSON子串，类型为<code>JSONObject</code>；</li>
+<li>第三步：通过<code>JSONUtil.toBean(data, Shop.class)</code>将<code>JSONObject</code>转为具体的<code>Shop</code>实体类。</li>
+</ul>
+<p>1.2 <code>redisData.getData()</code>的实际类型<br>
+<code>redisData.getData()</code>的<strong>声明类型</strong>是<code>Object</code>（因为<code>RedisData</code>类中<code>data</code>字段定义为<code>Object</code>），但<strong>实际运行类型</strong>是<code>JSONObject</code>（由<code>JSONUtil.toBean()</code>的反序列化规则决定）。<br>
+若直接用<code>Shop shop = (Shop)redisData.getData()</code>强转会报类型转换异常，必须先转<code>JSONObject</code>再解析。</p>
+<hr>
+<ol start="2">
+<li><code>boolean isLock = false; isLock = tryGetLock(lockKey);</code> 为何不能直接<code>isLock = tryGetLock(lockKey);</code>？<br>
+2.1 语法层面：可以直接赋值<br>
+从语法上，<code>boolean isLock = tryGetLock(lockKey);</code> 完全可行，原代码先定义<code>isLock = false</code>再赋值属于<strong>冗余写法</strong>，并非必须。<br>
+2.2 代码设计层面的潜在考量<br>
+原代码可能是为了：</li>
+</ol>
+<ul>
+<li>可读性：显式初始化变量，让新手更容易理解变量的初始状态；</li>
+<li>容错性：若<code>tryGetLock()</code>返回<code>null</code>（理论上不会，因为方法返回<code>boolean</code>），避免<code>NullPointerException</code>；<br>
+但实际开发中，更简洁的写法是直接赋值：<code>boolean isLock = tryGetLock(lockKey);</code>，无需额外初始化。</li>
+</ul>
+<hr>
+<ol start="3">
+<li>为何获取锁后要再次检查缓存是否过期？不是已经检查过了？<br>
+3.1 核心原因：“检查过期”到“获取锁”存在<strong>时间窗口</strong><br>
+第一次检查缓存过期（<code>expireTime.isAfter(LocalDateTime.now())</code>）和获取锁（<code>tryGetLock(lockKey)</code>）之间，可能发生以下情况：</li>
+</ol>
+<ul>
+<li>线程A：检查到缓存过期 → 准备获取锁（耗时10ms）；</li>
+<li>线程B：同时检查到缓存过期 → 先于线程A获取锁 → 完成缓存重建（更新了Redis中缓存的过期时间）；</li>
+<li>线程A：10ms后获取到锁，若不再次检查，会重复执行“查库+写缓存”，造成资源浪费。</li>
+</ul>
+<p>3.2 举例说明<br>
+第一次检查：线程A判断缓存过期（时间T1）；<br>
+获取锁耗时：线程A竞争锁耗时50ms（时间T1→T2）；<br>
+线程B：在T1-T2期间已完成缓存重建，Redis中缓存的过期时间已更新为未过期；<br>
+线程A：获取锁后若不再次检查，会重复重建缓存，违背“缓存重建只执行一次”的设计目标。</p>
+<ol start="4">
+<li><code>if(isLock)</code>中直接复用<code>json = stringRedisTemplate.opsForValue().get(key)</code>（不定义新变量<code>newJson</code>）有何问题？<br>
+4.1 核心差异：变量的<strong>语义性</strong>与<strong>数据时效性</strong></li>
+</ol>
+<ul>
+<li>不定义新变量（直接复用<code>json</code>）：<pre><code class="prism language-java"><span class="token comment">// 原写法：复用已有变量</span>
+json <span class="token operator">=</span> stringRedisTemplate<span class="token punctuation">.</span><span class="token function">opsForValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span> 
+</code></pre>
+</li>
+<li>定义新变量<code>newJson</code>：<pre><code class="prism language-java"><span class="token comment">// 推荐写法：定义新变量</span>
+<span class="token class-name">String</span> newJson <span class="token operator">=</span> stringRedisTemplate<span class="token punctuation">.</span><span class="token function">opsForValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+</li>
+</ul>
+<p>4.2 直接复用<code>json</code>的核心问题</p>
+<h4><a id="1_427"></a>（1）语义混淆，可读性差</h4>
+<ul>
+<li>方法开头的<code>json</code>变量：代表<strong>第一次查询缓存的旧数据</strong>（时间点T1），语义是“初始缓存数据”；</li>
+<li>获取锁后重新赋值的<code>json</code>：代表<strong>最新查询缓存的新数据</strong>（时间点T2），语义是“校验用缓存数据”；<br>
+两次赋值的语义完全不同，复用同一个变量会导致代码阅读者无法区分“初始数据”和“最新数据”，增加维护成本。</li>
+</ul>
+<h4><a id="2_432"></a>（2）丢失初始数据，存在逻辑风险</h4>
+<p>若后续代码需要用到“第一次查询的缓存数据”（比如返回过期缓存），复用<code>json</code>会覆盖原有值，导致初始数据丢失：</p>
+<pre><code class="prism language-java"><span class="token comment">// 错误示例：复用json导致初始数据丢失</span>
+<span class="token class-name">String</span> json <span class="token operator">=</span> stringRedisTemplate<span class="token punctuation">.</span><span class="token function">opsForValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// T1：初始数据</span>
+<span class="token keyword">if</span> <span class="token punctuation">(</span>expireTime<span class="token punctuation">.</span><span class="token function">isBefore</span><span class="token punctuation">(</span><span class="token class-name">LocalDateTime</span><span class="token punctuation">.</span><span class="token function">now</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment">// 缓存过期</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>isLock<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        json <span class="token operator">=</span> stringRedisTemplate<span class="token punctuation">.</span><span class="token function">opsForValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// T2：覆盖为最新数据</span>
+        <span class="token comment">// 后续若需要返回过期缓存（原逻辑return shop），但shop是基于初始json解析的，若误用到新json会出问题</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span class="token keyword">return</span> shop<span class="token punctuation">;</span> <span class="token comment">// shop基于初始json解析，但若代码误写为基于新json，会返回错误数据</span>
+</code></pre>
+<h4><a id="3_446"></a>（3）无任何收益，违背编码规范</h4>
+<p>复用变量仅“节省一个变量定义”，但牺牲了代码的可读性和可维护性，不符合“一个变量对应一个语义”的编码规范。</p>
+<p>4.3 结论<br>
+<strong>不建议直接复用<code>json</code>变量</strong>，必须定义新变量（如<code>newJson</code>）：</p>
+<ul>
+<li>明确区分“初始缓存数据”和“获取锁后最新缓存数据”的语义；</li>
+<li>保留初始数据，避免后续逻辑误用；</li>
+<li>降低代码理解成本，符合“见名知意”的编码原则。<br>
+<br><br>
+5.CACHE_REBUILD_EXECTOR.submit(任务)<br>
+意思：<br>
+把这段代码交给线程池，让线程池找一个空闲线程去执行。</li>
+</ul>
+<pre><code class="prism language-java"><span class="token comment">// 提交任务到线程池，异步重建，不阻塞当前线程</span>
+<span class="token constant">CACHE_REBUILD_EXECTOR</span><span class="token punctuation">.</span><span class="token function">submit</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">-&gt;</span> <span class="token punctuation">{</span>
+   <span class="token keyword">try</span><span class="token punctuation">{</span>
+        <span class="token comment">//重建缓存</span>
+         <span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">saveShop2Redis</span><span class="token punctuation">(</span>id<span class="token punctuation">,</span><span class="token number">20L</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+       <span class="token punctuation">}</span><span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Exception</span> e<span class="token punctuation">)</span><span class="token punctuation">{</span>
+           <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">RuntimeException</span><span class="token punctuation">(</span>e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+       <span class="token punctuation">}</span><span class="token keyword">finally</span> <span class="token punctuation">{</span>
+           <span class="token function">unlock</span><span class="token punctuation">(</span>lockKey<span class="token punctuation">)</span><span class="token punctuation">;</span>
+       <span class="token punctuation">}</span>
+ <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<h3><a id="_471"></a>总结</h3>
+<ol>
+<li>获取锁后重新查询缓存不能复用原有<code>json</code>变量，核心是保证语义清晰、避免数据覆盖；</li>
+<li>定义新变量（如<code>newJson</code>）是遵循“一个变量对应一个语义”的编码规范，无额外性能损耗但大幅提升可读性；</li>
+<li>复用变量会丢失初始缓存数据，存在后续逻辑误用的风险。</li>
+</ol>
+<p><img src="https://i-blog.csdnimg.cn/direct/4b4e37a0f5364503b8fbb30d92f276bc.png" alt="在这里插入图片描述"></p>
+<h1><a id="_478"></a>前置知识：泛型方法</h1>
+<pre><code class="prism language-java"><span class="token keyword">public</span> <span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">R</span><span class="token punctuation">,</span> ID<span class="token punctuation">&gt;</span></span> <span class="token class-name">R</span> <span class="token function">queryWithLogicalExpire</span><span class="token punctuation">(</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">)</span>
+</code></pre>
+<ol>
+<li><strong>语法定义</strong><br>
+<code>&lt;R, ID&gt;</code>：方法级泛型声明，位置在<strong>修饰符之后、返回值之前</strong>。</li>
+<li><strong>核心含义</strong><br>
+声明方法使用两个泛型参数：
+<ul>
+<li><code>R</code>：结果类型</li>
+<li><code>ID</code>：ID 类型<br>
+作用：允许在参数、返回值、方法体中使用这两个泛型。</li>
+</ul>
+</li>
+<li><strong>对应关系</strong>
+<ul>
+<li><code>&lt;R, ID&gt;</code>：声明泛型</li>
+<li><code>R</code>：方法返回值类型</li>
+</ul>
+</li>
+</ol>
+<blockquote>
+<p>一句话总结：<strong>先声明泛型，后使用类型。</strong></p>
+</blockquote>
+<hr>
+<h1><a id="FunctionID_R____497"></a>Function&lt;ID, R&gt; 语法 + 代码对照</h1>
+<pre><code class="prism language-java"><span class="token class-name">Function</span><span class="token generics"><span class="token punctuation">&lt;</span>ID<span class="token punctuation">,</span> <span class="token class-name">R</span><span class="token punctuation">&gt;</span></span> dbFallback
+</code></pre>
+<ol>
+<li><strong>语法本质</strong>
+<ul>
+<li>函数式接口，接收<code>ID</code>，返回<code>R</code></li>
+<li>调用方式：<code>apply(参数)</code></li>
+</ul>
+</li>
+<li><strong>工具类中作用</strong><br>
+代表<strong>查询数据库的逻辑</strong>，工具类只调用、不关心实现。</li>
+<li><strong>工具类内调用</strong><pre><code class="prism language-java"><span class="token class-name">R</span> r1 <span class="token operator">=</span> dbFallback<span class="token punctuation">.</span><span class="token function">apply</span><span class="token punctuation">(</span>id<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+</li>
+<li><strong>业务层传入</strong><pre><code class="prism language-java"><span class="token keyword">this</span><span class="token operator">::</span><span class="token function">getById</span>
+</code></pre>
+</li>
+<li><strong>类型绑定</strong><pre><code class="prism language-java"><span class="token class-name">Function</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">Long</span><span class="token punctuation">,</span> <span class="token class-name">Shop</span><span class="token punctuation">&gt;</span></span> dbFallback <span class="token operator">=</span> <span class="token keyword">this</span><span class="token operator">::</span><span class="token function">getById</span><span class="token punctuation">;</span>
+</code></pre>
+</li>
+<li><strong>运行时等价代码</strong><pre><code class="prism language-java"><span class="token class-name">Shop</span> shop <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">getById</span><span class="token punctuation">(</span>id<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+</li>
+</ol>
+<blockquote>
+<p>一句话记忆：<strong>Function 是把查库方法当参数传，用 apply 执行。</strong></p>
+</blockquote>
+<p><img src="https://i-blog.csdnimg.cn/direct/b1a51035605d40afb5c4e7990309ed6a.png" alt="在这里插入图片描述"><br>
+<strong>方法1、3：解决缓存穿透</strong></p>
+<pre><code class="prism language-java"> <span class="token keyword">public</span> <span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">R</span><span class="token punctuation">,</span> ID<span class="token punctuation">&gt;</span></span> <span class="token class-name">R</span> <span class="token function">queryWithPassThrough</span><span class="token punctuation">(</span>
+         <span class="token class-name">String</span> keyPrefix<span class="token punctuation">,</span> <span class="token class-name">ID</span> id<span class="token punctuation">,</span> <span class="token class-name">Class</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">R</span><span class="token punctuation">&gt;</span></span> type<span class="token punctuation">,</span> <span class="token class-name">Function</span><span class="token generics"><span class="token punctuation">&lt;</span>ID<span class="token punctuation">,</span> <span class="token class-name">R</span><span class="token punctuation">&gt;</span></span> dbFallback<span class="token punctuation">,</span> <span class="token class-name">Long</span> time<span class="token punctuation">,</span> <span class="token class-name">TimeUnit</span> timeUnit<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+     <span class="token comment">//1.尝试从Redis中查询缓存</span>
+     <span class="token class-name">String</span> key <span class="token operator">=</span> keyPrefix <span class="token operator">+</span> id<span class="token punctuation">;</span>
+     <span class="token class-name">String</span> json <span class="token operator">=</span> stringRedisTemplate<span class="token punctuation">.</span><span class="token function">opsForValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+     <span class="token comment">//2.缓存命中</span>
+ 	<span class="token comment">//Blank中包含了 null、""</span>
+     <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token class-name">StrUtil</span><span class="token punctuation">.</span><span class="token function">isNotBlank</span><span class="token punctuation">(</span>json<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+         <span class="token comment">//命中，返回商铺信息</span>
+         <span class="token keyword">return</span> <span class="token class-name">JSONUtil</span><span class="token punctuation">.</span><span class="token function">toBean</span><span class="token punctuation">(</span>json<span class="token punctuation">,</span> type<span class="token punctuation">)</span><span class="token punctuation">;</span>
+     <span class="token punctuation">}</span>
+     <span class="token comment">//判断命中的是否为空值“”   (查到的是穿透的结果)</span>
+     <span class="token keyword">if</span> <span class="token punctuation">(</span>json <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+         <span class="token comment">//返回错误信息</span>
+         <span class="token keyword">return</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+     <span class="token punctuation">}</span>
+
+     <span class="token comment">//3.未命中</span>
+     <span class="token comment">//根据id查询数据库</span>
+     <span class="token class-name">R</span> r <span class="token operator">=</span> dbFallback<span class="token punctuation">.</span><span class="token function">apply</span><span class="token punctuation">(</span>id<span class="token punctuation">)</span><span class="token punctuation">;</span>
+     <span class="token comment">//不存在，返回状态码</span>
+     <span class="token keyword">if</span> <span class="token punctuation">(</span>r <span class="token operator">==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+         <span class="token comment">// 将空值写入redis, 避免缓存穿透</span>
+         stringRedisTemplate<span class="token punctuation">.</span><span class="token function">opsForValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span>key<span class="token punctuation">,</span> <span class="token string">""</span><span class="token punctuation">,</span> <span class="token constant">CACHE_NULL_TTL</span><span class="token punctuation">,</span> <span class="token class-name">TimeUnit</span><span class="token punctuation">.</span><span class="token constant">MINUTES</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+         <span class="token keyword">return</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+     <span class="token punctuation">}</span>
+     <span class="token comment">//商铺存在，写入缓存</span>
+     <span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span>key<span class="token punctuation">,</span> r<span class="token punctuation">,</span> time<span class="token punctuation">,</span>  timeUnit<span class="token punctuation">)</span><span class="token punctuation">;</span>
+     <span class="token comment">//4.返回店铺信息</span>
+     <span class="token keyword">return</span> r<span class="token punctuation">;</span>
+ <span class="token punctuation">}</span>
+</code></pre>
+<pre><code class="prism language-java"><span class="token class-name">Shop</span> shop <span class="token operator">=</span> cacheClient<span class="token punctuation">.</span><span class="token function">queryWithPassThrough</span><span class="token punctuation">(</span><span class="token constant">CACHE_SHOP_KEY</span><span class="token punctuation">,</span> id<span class="token punctuation">,</span> <span class="token class-name">Shop</span><span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">,</span> id1 <span class="token operator">-&gt;</span> <span class="token function">getById</span><span class="token punctuation">(</span>id1<span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token constant">CACHE_SHOP_TTL</span><span class="token punctuation">,</span> <span class="token class-name">TimeUnit</span><span class="token punctuation">.</span><span class="token constant">MINUTES</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+</code></pre>
+<p><strong>方法2、4：解决缓存击穿</strong></p>
+<pre><code class="prism language-java"><span class="token keyword">public</span> <span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">R</span><span class="token punctuation">,</span> ID<span class="token punctuation">&gt;</span></span> <span class="token class-name">R</span> <span class="token function">queryWithLogicalExpire</span><span class="token punctuation">(</span><span class="token class-name">String</span> keyPrefix<span class="token punctuation">,</span> <span class="token class-name">ID</span> id<span class="token punctuation">,</span> <span class="token class-name">Class</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">R</span><span class="token punctuation">&gt;</span></span> type<span class="token punctuation">,</span> <span class="token class-name">Function</span><span class="token generics"><span class="token punctuation">&lt;</span>ID<span class="token punctuation">,</span> <span class="token class-name">R</span><span class="token punctuation">&gt;</span></span> dbFallback<span class="token punctuation">,</span> <span class="token class-name">Long</span> time<span class="token punctuation">,</span> <span class="token class-name">TimeUnit</span> timeUnit<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+       <span class="token comment">//1.尝试从Redis中查询缓存</span>
+       <span class="token class-name">String</span> key <span class="token operator">=</span> keyPrefix <span class="token operator">+</span> id<span class="token punctuation">;</span>
+       <span class="token class-name">String</span> shopJson <span class="token operator">=</span> stringRedisTemplate<span class="token punctuation">.</span><span class="token function">opsForValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+       <span class="token comment">//2.判断是否存在</span>
+       <span class="token comment">//2.1未命中，直接返回</span>
+       <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token class-name">StrUtil</span><span class="token punctuation">.</span><span class="token function">isBlank</span><span class="token punctuation">(</span>shopJson<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+           <span class="token keyword">return</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+       <span class="token punctuation">}</span>
+       <span class="token comment">//3.命中，判断缓存是否过期</span>
+       <span class="token comment">// 需要先把json反序列化成对象</span>
+       <span class="token class-name">RedisData</span> redisData <span class="token operator">=</span> <span class="token class-name">JSONUtil</span><span class="token punctuation">.</span><span class="token function">toBean</span><span class="token punctuation">(</span>shopJson<span class="token punctuation">,</span> <span class="token class-name">RedisData</span><span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+       <span class="token class-name">JSONObject</span> data <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token class-name">JSONObject</span><span class="token punctuation">)</span>redisData<span class="token punctuation">.</span><span class="token function">getData</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">//店铺信息</span>
+       <span class="token class-name">R</span> r <span class="token operator">=</span> <span class="token class-name">JSONUtil</span><span class="token punctuation">.</span><span class="token function">toBean</span><span class="token punctuation">(</span>data<span class="token punctuation">,</span> type<span class="token punctuation">)</span><span class="token punctuation">;</span>
+       <span class="token class-name">LocalDateTime</span> expireTime <span class="token operator">=</span> redisData<span class="token punctuation">.</span><span class="token function">getExpireTime</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+       <span class="token comment">//5.判断是否过期</span>
+       <span class="token keyword">if</span> <span class="token punctuation">(</span>expireTime<span class="token punctuation">.</span><span class="token function">isAfter</span><span class="token punctuation">(</span><span class="token class-name">LocalDateTime</span><span class="token punctuation">.</span><span class="token function">now</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+           <span class="token comment">//5.1未过期</span>
+           <span class="token keyword">return</span> r<span class="token punctuation">;</span>
+       <span class="token punctuation">}</span>
+       <span class="token comment">//5.2过期, 需要缓存重建</span>
+       <span class="token comment">//6缓存重建</span>
+       <span class="token comment">//6.1获取互斥锁</span>
+       <span class="token class-name">String</span> lockKey <span class="token operator">=</span> <span class="token constant">LOCK_SHOP_KEY</span> <span class="token operator">+</span> id<span class="token punctuation">;</span>
+       <span class="token keyword">boolean</span> isLock <span class="token operator">=</span> <span class="token function">tryLock</span><span class="token punctuation">(</span>lockKey<span class="token punctuation">)</span><span class="token punctuation">;</span>
+       <span class="token comment">//6.2判断是否获取锁成功</span>
+       <span class="token keyword">if</span> <span class="token punctuation">(</span>isLock<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+           <span class="token comment">//TODO 6.3成功，开启独立线程， 实现缓存重建</span>
+           <span class="token comment">// 注意获取锁成功应该再次检测redis缓存是否过期， 存在则无序重建缓存。</span>
+           <span class="token constant">CACHE_REBUILD_EXECTOR</span><span class="token punctuation">.</span><span class="token function">submit</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">-&gt;</span><span class="token punctuation">{</span>
+               <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                   <span class="token comment">//1.查询数据库</span>
+                   <span class="token class-name">R</span> r1 <span class="token operator">=</span> dbFallback<span class="token punctuation">.</span><span class="token function">apply</span><span class="token punctuation">(</span>id<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                   <span class="token comment">//2.写入redis(带逻辑过期)</span>
+                   <span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">setWithLogicalExpire</span><span class="token punctuation">(</span>key<span class="token punctuation">,</span> r1<span class="token punctuation">,</span> time<span class="token punctuation">,</span> timeUnit<span class="token punctuation">)</span><span class="token punctuation">;</span>
+               <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Exception</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                   <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">RuntimeException</span><span class="token punctuation">(</span>e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+               <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+                   <span class="token comment">//释放锁</span>
+                   <span class="token function">unlock</span><span class="token punctuation">(</span>lockKey<span class="token punctuation">)</span><span class="token punctuation">;</span>
+               <span class="token punctuation">}</span>
+           <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+       <span class="token punctuation">}</span>
+
+       <span class="token comment">//6.3失败，返回过期商铺信息</span>
+       <span class="token keyword">return</span> r<span class="token punctuation">;</span>
+
+   <span class="token punctuation">}</span>
+</code></pre>
+<pre><code class="prism language-java"> <span class="token class-name">Shop</span> shop1 <span class="token operator">=</span> cacheClient<span class="token punctuation">.</span><span class="token function">queryWithLogicalExpire</span><span class="token punctuation">(</span><span class="token constant">CACHE_SHOP_KEY</span><span class="token punctuation">,</span> id<span class="token punctuation">,</span> <span class="token class-name">Shop</span><span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">,</span> <span class="token keyword">this</span><span class="token operator">::</span><span class="token function">getById</span><span class="token punctuation">,</span> <span class="token constant">CACHE_SHOP_TTL</span><span class="token punctuation">,</span> <span class="token class-name">TimeUnit</span><span class="token punctuation">.</span><span class="token constant">MINUTES</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+</div>
+</body>
+
+</html>

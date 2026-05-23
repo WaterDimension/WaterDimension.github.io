@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s \"https://api.github.com/users/WaterDimension\")",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\({k:d.get\\(k\\) for k in ['name','login','bio','avatar_url','public_repos','followers','following','blog','location','html_url','created_at']}, ensure_ascii=False, indent=2\\)\\)\")",
+      "Bash(python -m http.server 8765 --bind 127.0.0.1)",
+      "Bash(curl -sS -o /dev/null -w \"index:%{http_code} \" http://127.0.0.1:8765/index.html)",
+      "Bash(curl -sS -o /dev/null -w \"notes:%{http_code} \" http://127.0.0.1:8765/notes.html)",
+      "Bash(curl -sS -o /dev/null -w \"projects:%{http_code} \" http://127.0.0.1:8765/projects.html)",
+      "Bash(curl -sS -o /dev/null -w \"about:%{http_code} \" http://127.0.0.1:8765/about.html)",
+      "Bash(pkill -f \"http.server 8765\")",
+      "Bash(netstat -ano)",
+      "Bash(powershell -NoProfile -Command 'Get-NetTCPConnection -LocalPort 8765 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }')",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(git add *)"
+    ]
+  }
+}

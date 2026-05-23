@@ -1,0 +1,445 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MySQL存储引擎</title>
+  <link rel="stylesheet" href="https://stackedit.io/style.css" />
+</head>
+
+<body class="stackedit">
+  <div class="stackedit__html"><h1><a id="_MySQL_0"></a>🗄️ MySQL存储引擎核心知识</h1>
+<h2><a id="MySQL_2"></a>一、MySQL体系架构</h2>
+<p>MySQL的架构可以分为四个层次，像一座四层大楼，每层各司其职：</p>
+<pre><code>┌─────────────────────────────────────────────────────┐
+│                     连接层                            │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐   │
+│  │ 本地Socket │ │ TCP/IP  │ │  认证   │ │  权限   │   │
+│  │  通信    │ │  通信    │ │  授权   │ │  检查   │   │
+│  └─────────┘ └─────────┘ └─────────┘ └─────────┘   │
+├─────────────────────────────────────────────────────┤
+│                     服务层                            │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐   │
+│  │ SQL接口  │ │  查询缓存 │ │ 分析器  │ │ 优化器  │   │
+│  └─────────┘ └─────────┘ └─────────┘ └─────────┘   │
+│  ┌─────────────────────────────────────┐           │
+│  │     内置函数、存储过程、触发器        │           │
+│  └─────────────────────────────────────┘           │
+├─────────────────────────────────────────────────────┤
+│                     引擎层                            │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐   │
+│  │   InnoDB    │ │   MyISAM    │ │   Memory    │   │
+│  └─────────────┘ └─────────────┘ └─────────────┘   │
+├─────────────────────────────────────────────────────┤
+│                     存储层                            │
+│  ┌─────────────────────────────────────┐           │
+│  │  文件系统：数据、索引、日志、binlog  │           │
+│  └─────────────────────────────────────┘           │
+└─────────────────────────────────────────────────────┘
+</code></pre>
+<h3><a id="11__34"></a>1.1 连接层</h3>
+<p>最上层是一些客户端和连接服务，主要完成：</p>
+<ul>
+<li>连接处理（本地socket、TCP/IP通信）</li>
+<li>认证授权</li>
+<li>安全方案（SSL）</li>
+<li>线程池管理</li>
+</ul>
+<blockquote>
+<p>💡 <strong>每一句话</strong>：这里是MySQL的"门卫"，负责接待来访者并检查身份。</p>
+</blockquote>
+<h3><a id="12__43"></a>1.2 服务层</h3>
+<p>第二层是MySQL的核心服务层，负责：</p>
+<ul>
+<li>SQL接口：接收并执行SQL语句</li>
+<li>查询缓存：缓存查询结果（注意：MySQL 8.0已移除）</li>
+<li>分析器：词法分析、语法分析，生成解析树</li>
+<li>优化器：选择最优执行计划（决定表的查询顺序、索引使用等）</li>
+<li>内置函数、存储过程、触发器、视图等跨存储引擎的功能</li>
+</ul>
+<blockquote>
+<p>💡 <strong>一句话</strong>：这里是MySQL的"大脑"，负责理解指令并规划执行方案。</p>
+</blockquote>
+<h3><a id="13__53"></a>1.3 引擎层</h3>
+<p>存储引擎层，真正负责数据的存储和提取：</p>
+<ul>
+<li>通过API和服务层通信</li>
+<li>不同的存储引擎有不同的功能特性</li>
+<li>索引实现在这一层</li>
+<li><strong>插件式架构</strong>：可以根据业务需求灵活选择</li>
+</ul>
+<blockquote>
+<p>💡 <strong>一句话</strong>：这里是MySQL的"心脏"，真正的数据存储和读取核心。</p>
+</blockquote>
+<h3><a id="14__62"></a>1.4 存储层</h3>
+<p>数据存储层，将数据存储在文件系统上：</p>
+<ul>
+<li>数据文件</li>
+<li>索引文件</li>
+<li>日志文件（redolog、undolog、binlog等）</li>
+<li>错误日志、慢查询日志等</li>
+</ul>
+<blockquote>
+<p>💡 <strong>一句话</strong>：这里是MySQL的"仓库"，实际存放数据的地方。</p>
+</blockquote>
+<hr>
+<h2><a id="_73"></a>二、存储引擎介绍</h2>
+<h3><a id="21__75"></a>2.1 什么是存储引擎？</h3>
+<p><strong>存储引擎</strong>就是存储数据、建立索引、更新/查询数据等技术的<strong>实现方式</strong>。</p>
+<blockquote>
+<p>🚗 <strong>类比</strong>：就像发动机是汽车的核心，存储引擎是MySQL数据库的核心。直升机不能用舰载机的引擎，不同的业务场景也需要选择合适的存储引擎。</p>
+</blockquote>
+<p><strong>重要特性</strong>：</p>
+<ul>
+<li>存储引擎是基于<strong>表</strong>的，不是基于库的</li>
+<li>也称为<strong>表类型</strong></li>
+<li>创建表时可以指定，不指定则用默认</li>
+</ul>
+<h3><a id="22__86"></a>2.2 存储引擎操作</h3>
+<h4><a id="_88"></a>查看当前数据库支持的存储引擎</h4>
+<pre><code class="prism language-sql"><span class="token keyword">SHOW</span> ENGINES<span class="token punctuation">;</span>
+</code></pre>
+<h4><a id="_93"></a>创建表时指定存储引擎</h4>
+<pre><code class="prism language-sql"><span class="token keyword">CREATE</span> <span class="token keyword">TABLE</span> 表名 <span class="token punctuation">(</span>
+    字段<span class="token number">1</span> 字段<span class="token number">1</span>类型 <span class="token punctuation">[</span><span class="token keyword">COMMENT</span> 字段<span class="token number">1</span>注释<span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span>
+    字段n 字段n类型 <span class="token punctuation">[</span><span class="token keyword">COMMENT</span> 字段n注释<span class="token punctuation">]</span>
+<span class="token punctuation">)</span> <span class="token keyword">ENGINE</span> <span class="token operator">=</span> <span class="token keyword">INNODB</span> <span class="token punctuation">[</span><span class="token keyword">COMMENT</span> 表注释<span class="token punctuation">]</span><span class="token punctuation">;</span>
+</code></pre>
+<h4><a id="_102"></a>查看表的存储引擎</h4>
+<pre><code class="prism language-sql"><span class="token comment">-- 查看建表语句（会显示存储引擎）</span>
+<span class="token keyword">SHOW</span> <span class="token keyword">CREATE</span> <span class="token keyword">TABLE</span> account<span class="token punctuation">;</span>
+
+<span class="token comment">-- 默认存储引擎：InnoDB</span>
+</code></pre>
+<h4><a id="_110"></a>示例：创建不同存储引擎的表</h4>
+<pre><code class="prism language-sql"><span class="token comment">-- 创建MyISAM引擎的表</span>
+<span class="token keyword">CREATE</span> <span class="token keyword">TABLE</span> my_myisam <span class="token punctuation">(</span>
+    id <span class="token keyword">INT</span><span class="token punctuation">,</span>
+    name <span class="token keyword">VARCHAR</span><span class="token punctuation">(</span><span class="token number">10</span><span class="token punctuation">)</span>
+<span class="token punctuation">)</span> <span class="token keyword">ENGINE</span> <span class="token operator">=</span> MyISAM<span class="token punctuation">;</span>
+
+<span class="token comment">-- 创建Memory引擎的表</span>
+<span class="token keyword">CREATE</span> <span class="token keyword">TABLE</span> my_memory <span class="token punctuation">(</span>
+    id <span class="token keyword">INT</span><span class="token punctuation">,</span>
+    name <span class="token keyword">VARCHAR</span><span class="token punctuation">(</span><span class="token number">10</span><span class="token punctuation">)</span>
+<span class="token punctuation">)</span> <span class="token keyword">ENGINE</span> <span class="token operator">=</span> Memory<span class="token punctuation">;</span>
+</code></pre>
+<hr>
+<h2><a id="_127"></a>三、三大主流存储引擎详解</h2>
+<h3><a id="31_InnoDB_129"></a>3.1 InnoDB（默认存储引擎）</h3>
+<h4><a id="__131"></a>📌 介绍</h4>
+<p>InnoDB是一种兼顾高可靠性和高性能的通用存储引擎，从MySQL 5.5之后成为<strong>默认存储引擎</strong>。</p>
+<h4><a id="__134"></a>⭐ 特点</h4>
+<ul>
+<li>✅ <strong>支持事务</strong>（ACID模型）</li>
+<li>✅ <strong>行级锁</strong>：提高并发访问性能</li>
+<li>✅ <strong>支持外键</strong>：保证数据的完整性和正确性</li>
+</ul>
+<h4><a id="__139"></a>📁 文件结构</h4>
+<ul>
+<li><strong>xxx.ibd</strong>：每张表对应一个表空间文件，存储：
+<ul>
+<li>表结构（frm-早期版本 / sdi-8.0版本）</li>
+<li>数据</li>
+<li>索引</li>
+</ul>
+</li>
+</ul>
+<pre><code class="prism language-sql"><span class="token comment">-- 查看innodb_file_per_table参数</span>
+<span class="token keyword">SHOW</span> VARIABLES <span class="token operator">LIKE</span> <span class="token string">'innodb_file_per_table'</span><span class="token punctuation">;</span>
+<span class="token comment">-- 开启时，每张表对应一个ibd文件</span>
+</code></pre>
+<blockquote>
+<p>🔧 <strong>小工具</strong>：可以使用 <code>ibd2sdi</code> 命令从ibd文件中提取sdi信息（包含表结构）</p>
+</blockquote>
+<h4><a id="__153"></a>🏗️ 逻辑存储结构</h4>
+<pre><code>表空间 (Tablespace) ← ibd文件
+    ↓
+段 (Segment) ← 数据段、索引段、回滚段
+    ↓
+区 (Extent) ← 每个区1M，包含64个连续页
+    ↓
+页 (Page) ← 磁盘管理最小单元，默认16KB
+    ↓
+行 (Row) ← 数据按行存放
+</code></pre>
+
+<table>
+<thead>
+<tr>
+<th>层级</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>表空间</strong></td>
+<td>最高层，ibd文件就是表空间</td>
+</tr>
+<tr>
+<td><strong>段</strong></td>
+<td>数据段、索引段、回滚段，引擎自动管理</td>
+</tr>
+<tr>
+<td><strong>区</strong></td>
+<td>单元结构，每个区1M = 64个连续页</td>
+</tr>
+<tr>
+<td><strong>页</strong></td>
+<td>磁盘管理最小单元，默认16KB</td>
+</tr>
+<tr>
+<td><strong>行</strong></td>
+<td>面向行的存储，包含隐藏字段</td>
+</tr>
+</tbody>
+</table><hr>
+<h3><a id="32_MyISAM_177"></a>3.2 MyISAM（早期默认）</h3>
+<h4><a id="__179"></a>📌 介绍</h4>
+<p>MySQL早期的默认存储引擎，现在仍被广泛使用。</p>
+<h4><a id="__182"></a>⭐ 特点</h4>
+<ul>
+<li>❌ <strong>不支持事务</strong></li>
+<li>❌ <strong>不支持外键</strong></li>
+<li>✅ <strong>支持表锁</strong>（不支持行锁）</li>
+<li>✅ <strong>访问速度快</strong></li>
+</ul>
+<h4><a id="__188"></a>📁 文件结构</h4>
+
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>存储内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>xxx.sdi</strong></td>
+<td>表结构信息</td>
+</tr>
+<tr>
+<td><strong>xxx.MYD</strong></td>
+<td>数据（MY Data）</td>
+</tr>
+<tr>
+<td><strong>xxx.MYI</strong></td>
+<td>索引（MY Index）</td>
+</tr>
+</tbody>
+</table><hr>
+<h3><a id="33_Memory_197"></a>3.3 Memory（内存引擎）</h3>
+<h4><a id="__199"></a>📌 介绍</h4>
+<p>数据存储在内存中的引擎，通常用作临时表或缓存。</p>
+<h4><a id="__202"></a>⭐ 特点</h4>
+<ul>
+<li>✅ <strong>数据存放在内存中</strong></li>
+<li>✅ <strong>默认Hash索引</strong></li>
+<li>❌ 断电数据丢失</li>
+<li>❌ 表大小受限（受内存限制）</li>
+</ul>
+<h4><a id="__208"></a>📁 文件结构</h4>
+<ul>
+<li><strong>xxx.sdi</strong>：只存储表结构信息</li>
+<li><strong>数据</strong>：运行时在内存中，不持久化</li>
+</ul>
+<hr>
+<h2><a id="_214"></a>四、三大引擎对比表</h2>
+
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>InnoDB</th>
+<th>MyISAM</th>
+<th>Memory</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>存储限制</strong></td>
+<td>64TB</td>
+<td>有</td>
+<td>有（内存限制）</td>
+</tr>
+<tr>
+<td><strong>事务安全</strong></td>
+<td>✅ 支持</td>
+<td>❌ 不支持</td>
+<td>❌ 不支持</td>
+</tr>
+<tr>
+<td><strong>锁机制</strong></td>
+<td>行锁</td>
+<td>表锁</td>
+<td>表锁</td>
+</tr>
+<tr>
+<td><strong>B+Tree索引</strong></td>
+<td>✅ 支持</td>
+<td>✅ 支持</td>
+<td>✅ 支持</td>
+</tr>
+<tr>
+<td><strong>Hash索引</strong></td>
+<td>❌ 不支持</td>
+<td>❌ 不支持</td>
+<td>✅ 默认</td>
+</tr>
+<tr>
+<td><strong>全文索引</strong></td>
+<td>✅ 5.6后支持</td>
+<td>✅ 支持</td>
+<td>❌ 不支持</td>
+</tr>
+<tr>
+<td><strong>空间使用</strong></td>
+<td>高</td>
+<td>低</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td><strong>内存使用</strong></td>
+<td>高</td>
+<td>低</td>
+<td>中等</td>
+</tr>
+<tr>
+<td><strong>批量插入速度</strong></td>
+<td>低</td>
+<td>高</td>
+<td>高</td>
+</tr>
+<tr>
+<td><strong>外键支持</strong></td>
+<td>✅ 支持</td>
+<td>❌ 不支持</td>
+<td>❌ 不支持</td>
+</tr>
+</tbody>
+</table><hr>
+<h2><a id="InnoDB_vs_MyISAM_231"></a>五、面试必问：InnoDB vs MyISAM</h2>
+<h3><a id="QInnoDBMyISAM_233"></a>Q：InnoDB引擎与MyISAM引擎的区别？</h3>
+<h4><a id="_235"></a>核心三大区别</h4>
+
+<table>
+<thead>
+<tr>
+<th>对比项</th>
+<th>InnoDB</th>
+<th>MyISAM</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>① 事务支持</strong></td>
+<td>✅ 支持事务（ACID）</td>
+<td>❌ 不支持事务</td>
+</tr>
+<tr>
+<td><strong>② 锁机制</strong></td>
+<td>✅ 行锁 + 表锁</td>
+<td>❌ 仅表锁</td>
+</tr>
+<tr>
+<td><strong>③ 外键支持</strong></td>
+<td>✅ 支持外键</td>
+<td>❌ 不支持外键</td>
+</tr>
+</tbody>
+</table><h4><a id="_243"></a>扩展区别（加分项）</h4>
+
+<table>
+<thead>
+<tr>
+<th>对比项</th>
+<th>InnoDB</th>
+<th>MyISAM</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>存储文件</strong></td>
+<td>.ibd（数据和索引一起）</td>
+<td>.MYD（数据）、.MYI（索引）</td>
+</tr>
+<tr>
+<td><strong>崩溃恢复</strong></td>
+<td>✅ 支持（通过redolog）</td>
+<td>❌ 容易损坏</td>
+</tr>
+<tr>
+<td><strong>MVCC</strong></td>
+<td>✅ 支持</td>
+<td>❌ 不支持</td>
+</tr>
+<tr>
+<td><strong>全文索引</strong></td>
+<td>5.6后支持</td>
+<td>支持</td>
+</tr>
+<tr>
+<td><strong>缓存</strong></td>
+<td>缓存数据+索引</td>
+<td>只缓存索引</td>
+</tr>
+</tbody>
+</table><hr>
+<h2><a id="_255"></a>六、如何选择存储引擎？</h2>
+<h3><a id="_257"></a>选择原则</h3>
+<blockquote>
+<p>根据应用系统的特点选择合适的存储引擎，复杂系统可以<strong>组合使用</strong>多种引擎。</p>
+</blockquote>
+<h3><a id="_260"></a>场景推荐</h3>
+<h4><a id="_InnoDB_262"></a>🎯 InnoDB（默认首选）</h4>
+<ul>
+<li><strong>适用场景</strong>：
+<ul>
+<li>对事务完整性要求高</li>
+<li>并发条件下要求数据一致性</li>
+<li>包含大量更新、删除操作</li>
+</ul>
+</li>
+<li><strong>典型应用</strong>：订单系统、金融系统、用户中心</li>
+</ul>
+<h4><a id="_MyISAM_269"></a>🎯 MyISAM</h4>
+<ul>
+<li><strong>适用场景</strong>：
+<ul>
+<li>读操作和插入操作为主</li>
+<li>很少更新和删除</li>
+<li>对事务和并发要求不高</li>
+</ul>
+</li>
+<li><strong>典型应用</strong>：数据仓库、日志系统、报表系统</li>
+</ul>
+<h4><a id="_Memory_276"></a>🎯 Memory</h4>
+<ul>
+<li><strong>适用场景</strong>：
+<ul>
+<li>临时表、缓存</li>
+<li>需要极快访问速度</li>
+<li>数据可以丢失</li>
+</ul>
+</li>
+<li><strong>典型应用</strong>：会话管理、中间计算结果缓存</li>
+</ul>
+<hr>
+<h2><a id="_285"></a>七、一句话总结</h2>
+<pre><code>InnoDB = 事务 + 行锁 + 外键（全能选手）
+MyISAM = 高速读写 + 表锁（读多写少专用）
+Memory = 内存存储 + Hash索引（临时工）
+</code></pre>
+<blockquote>
+<p>📚 <strong>官方文档</strong>：</p>
+<ul>
+<li><a href="https://dev.mysql.com/doc/refman/8.0/en/innodb-introduction.html">InnoDB介绍</a></li>
+<li><a href="https://dev.mysql.com/doc/refman/8.0/en/myisam-storage-engine.html">MyISAM介绍</a></li>
+</ul>
+</blockquote>
+</div>
+</body>
+
+</html>

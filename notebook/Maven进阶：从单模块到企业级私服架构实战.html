@@ -1,0 +1,524 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maven进阶：从单模块到企业级私服架构实战</title>
+  <link rel="stylesheet" href="https://stackedit.io/style.css" />
+</head>
+
+<body class="stackedit">
+  <div class="stackedit__html"><h1><a id="_Maven_0"></a>📦 Maven进阶：从单模块到企业级私服架构实战</h1>
+<blockquote>
+<p>本文通过一个真实的团队开发故事，带你深入理解Maven的分模块开发、依赖冲突、聚合继承以及私服搭建等核心概念。</p>
+</blockquote>
+<hr>
+<h2><a id="_6"></a>一、从一个开发困境说起</h2>
+<h3><a id="_8"></a>故事背景</h3>
+<p>想象一下这个场景：</p>
+<p><strong>张三</strong>负责开发<code>ssm_crm</code>项目，他写了一个通用的<code>ssm_pojo</code>模块，包含了所有的实体类。为了方便使用，他通过<code>mvn install</code>把模块安装到了本地仓库。</p>
+<p><strong>李四</strong>负责开发<code>ssm_order</code>项目，需要用到张三的<code>ssm_pojo</code>模块。按照Maven的依赖管理，他在<code>pom.xml</code>中添加了依赖：</p>
+<pre><code class="prism language-xml"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>com.itheima<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>maven_03_pojo<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>1.0-SNAPSHOT<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+</code></pre>
+<p><strong>问题来了</strong>：李四的机器上并没有这个jar包，Maven从本地仓库找不到，编译报错！</p>
+<h3><a id="_26"></a>解决方案</h3>
+<p>张三需要把模块分享给李四，有几种方式：</p>
+<ol>
+<li><strong>直接拷贝</strong> ❌ 太原始，容易版本混乱</li>
+<li><strong>上传到中央仓库</strong> ❌ 中央仓库不允许上传私人项目</li>
+<li><strong>搭建私服</strong> ✅ 企业级解决方案</li>
+</ol>
+<p>但在讲私服之前，我们先来看看Maven分模块开发会遇到的几个核心问题。</p>
+<hr>
+<h2><a id="_38"></a>二、分模块开发设计</h2>
+<h3><a id="_40"></a>为什么需要分模块？</h3>
+<pre><code>单体应用                 分模块应用
+┌─────────────┐       ┌─────────────────┐
+│             │       │  maven_03_ssm   │
+│  一个项目   │  →    │   (业务层)      │
+│  所有代码   │       ├─────────────────┤
+│             │       │  maven_02_pojo  │
+└─────────────┘       │   (实体层)      │
+                      ├─────────────────┤
+                      │  maven_01_utils │
+                      │   (工具层)      │
+                      └─────────────────┘
+</code></pre>
+<h3><a id="_56"></a>模块划分方式</h3>
+
+<table>
+<thead>
+<tr>
+<th>划分方式</th>
+<th>说明</th>
+<th>示例</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>按功能分</strong></td>
+<td>按业务功能拆分</td>
+<td>用户模块、订单模块、商品模块</td>
+</tr>
+<tr>
+<td><strong>按层分</strong></td>
+<td>按技术层次拆分</td>
+<td>pojo、dao、service、controller</td>
+</tr>
+</tbody>
+</table><h3><a id="_63"></a>模块间的依赖管理</h3>
+<p>当模块A依赖模块B时：</p>
+<pre><code class="prism language-xml"><span class="token comment">&lt;!-- 在模块A的pom.xml中引入模块B --&gt;</span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>com.itheima<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>maven_02_pojo<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>1.0-SNAPSHOT<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+</code></pre>
+<p><strong>重要提示</strong>：被依赖的模块必须先<code>install</code>到本地仓库！</p>
+<pre><code class="prism language-bash"><span class="token comment"># 进入模块B目录</span>
+mvn <span class="token function">install</span>
+</code></pre>
+<hr>
+<h2><a id="_85"></a>三、依赖冲突：隐藏的定时炸弹</h2>
+<h3><a id="_87"></a>故事续集</h3>
+<p>随着项目发展，模块越来越多，依赖关系变得越来越复杂：</p>
+<pre><code>maven_03_ssm
+    ├── spring-context:5.2.10.RELEASE
+    ├── spring-web:5.2.9.RELEASE  ← 版本不一致！
+    ├── maven_02_pojo
+    │       └── commons-logging:1.2
+    └── maven_01_utils
+            └── commons-logging:1.1  ← 版本冲突！
+</code></pre>
+<p><strong>问题</strong>：当同一个jar包有多个不同版本时，就会发生<strong>依赖冲突</strong>！</p>
+<h3><a id="_103"></a>依赖冲突解决规则</h3>
+<p>Maven解决依赖冲突有三条黄金法则：</p>
+
+<table>
+<thead>
+<tr>
+<th>规则</th>
+<th>说明</th>
+<th>示例</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>1. 路径优先</strong></td>
+<td>层级越浅优先级越高</td>
+<td><code>A→B→C:1.0</code> 和 <code>A→C:2.0</code>，选2.0</td>
+</tr>
+<tr>
+<td><strong>2. 声明优先</strong></td>
+<td>同层级时先声明的优先</td>
+<td><code>pom.xml</code>中先写的生效</td>
+</tr>
+<tr>
+<td><strong>3. 后覆盖前</strong></td>
+<td>同版本时后面的覆盖前面的</td>
+<td>在同一个pom中多次声明，后面的生效</td>
+</tr>
+</tbody>
+</table><h3><a id="_113"></a>解决方案</h3>
+<h4><a id="1_115"></a>方案1：可选依赖（隐藏资源）</h4>
+<pre><code class="prism language-xml"><span class="token comment">&lt;!-- 在提供方隐藏依赖 --&gt;</span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>commons-logging<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>commons-logging<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>1.2<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>optional</span><span class="token punctuation">&gt;</span></span>true<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>optional</span><span class="token punctuation">&gt;</span></span>  <span class="token comment">&lt;!-- 该依赖不会传递给使用者 --&gt;</span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+</code></pre>
+<h4><a id="2_127"></a>方案2：排除依赖（剔除不需要的）</h4>
+<pre><code class="prism language-xml"><span class="token comment">&lt;!-- 在使用方排除特定依赖 --&gt;</span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>com.itheima<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>maven_02_pojo<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>1.0-SNAPSHOT<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>exclusions</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>exclusion</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>commons-logging<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>commons-logging<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>exclusion</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>exclusions</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+</code></pre>
+<hr>
+<h2><a id="_146"></a>四、聚合与继承：团队协作的基石</h2>
+<h3><a id="_148"></a>新的问题</h3>
+<p>随着模块越来越多，新问题出现了：</p>
+<ol>
+<li><strong>安装麻烦</strong>：每次修改都要逐个<code>install</code>所有模块</li>
+<li><strong>重复配置</strong>：每个模块都要配置相同的依赖和插件</li>
+<li><strong>版本维护</strong>：Spring版本升级时，所有模块都要改</li>
+</ol>
+<h3><a id="41__156"></a>4.1 聚合工程：一键构建</h3>
+<p><strong>聚合</strong>：创建一个父项目，统一管理所有子模块的构建。</p>
+<pre><code class="prism language-xml"><span class="token comment">&lt;!-- 聚合工程的pom.xml --&gt;</span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>project</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>com.itheima<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>maven_01_parent<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>1.0-SNAPSHOT<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>packaging</span><span class="token punctuation">&gt;</span></span>pom<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>packaging</span><span class="token punctuation">&gt;</span></span>  <span class="token comment">&lt;!-- 打包方式必须为pom --&gt;</span>
+    
+    <span class="token comment">&lt;!-- 聚合子模块 --&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>modules</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>module</span><span class="token punctuation">&gt;</span></span>../maven_02_pojo<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>module</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>module</span><span class="token punctuation">&gt;</span></span>../maven_03_dao<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>module</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>module</span><span class="token punctuation">&gt;</span></span>../maven_04_service<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>module</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>module</span><span class="token punctuation">&gt;</span></span>../maven_05_controller<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>module</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>modules</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>project</span><span class="token punctuation">&gt;</span></span>
+</code></pre>
+<p><strong>效果</strong>：在父项目执行<code>mvn clean install</code>，所有子模块自动构建！</p>
+<h3><a id="42__180"></a>4.2 继承工程：统一配置</h3>
+<p><strong>继承</strong>：子模块继承父模块的配置，避免重复。</p>
+<h4><a id="1_184"></a>步骤1：父工程配置</h4>
+<pre><code class="prism language-xml"><span class="token comment">&lt;!-- 父工程pom.xml --&gt;</span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>project</span><span class="token punctuation">&gt;</span></span>
+    <span class="token comment">&lt;!-- 统一管理依赖版本 --&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>properties</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>spring.version</span><span class="token punctuation">&gt;</span></span>5.2.10.RELEASE<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>spring.version</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>mysql.version</span><span class="token punctuation">&gt;</span></span>8.0.30<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>mysql.version</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>properties</span><span class="token punctuation">&gt;</span></span>
+    
+    <span class="token comment">&lt;!-- 依赖管理：子模块可以选择性继承 --&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependencyManagement</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependencies</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+                <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>org.springframework<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+                <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>spring-context<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+                <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>${spring.version}<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+                <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>mysql<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+                <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>mysql-connector-java<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+                <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>${mysql.version}<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependencies</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependencyManagement</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>project</span><span class="token punctuation">&gt;</span></span>
+</code></pre>
+<h4><a id="2_213"></a>步骤2：子工程继承</h4>
+<pre><code class="prism language-xml"><span class="token comment">&lt;!-- 子工程pom.xml --&gt;</span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>project</span><span class="token punctuation">&gt;</span></span>
+    <span class="token comment">&lt;!-- 指定父工程 --&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>parent</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>com.itheima<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>maven_01_parent<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>1.0-SNAPSHOT<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>relativePath</span><span class="token punctuation">&gt;</span></span>../maven_01_parent/pom.xml<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>relativePath</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>parent</span><span class="token punctuation">&gt;</span></span>
+    
+    <span class="token comment">&lt;!-- 只需指定groupId和version，不用写版本号 --&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependencies</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>org.springframework<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>spring-context<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+            <span class="token comment">&lt;!-- version从父工程继承，无需指定 --&gt;</span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependencies</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>project</span><span class="token punctuation">&gt;</span></span>
+</code></pre>
+<h3><a id="43__vs___237"></a>4.3 聚合 vs 继承 对比</h3>
+
+<table>
+<thead>
+<tr>
+<th>对比项</th>
+<th>聚合</th>
+<th>继承</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>作用</strong></td>
+<td>快速构建项目</td>
+<td>快速配置项目</td>
+</tr>
+<tr>
+<td><strong>配置位置</strong></td>
+<td>父模块中配置<code>&lt;modules&gt;</code></td>
+<td>子模块中配置<code>&lt;parent&gt;</code></td>
+</tr>
+<tr>
+<td><strong>感知关系</strong></td>
+<td>父模块知道有哪些子模块</td>
+<td>父模块不知道有哪些子模块</td>
+</tr>
+<tr>
+<td><strong>pom类型</strong></td>
+<td>packaging=<strong>pom</strong></td>
+<td>packaging=<strong>pom</strong></td>
+</tr>
+</tbody>
+</table><p><strong>完美结合</strong>：可以在同一个pom中同时实现聚合和继承！</p>
+<hr>
+<h2><a id="_250"></a>五、属性定义：让配置活起来</h2>
+<h3><a id="_252"></a>问题场景</h3>
+<p>当多个依赖使用相同版本时：</p>
+<pre><code class="prism language-xml"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependencies</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>org.springframework<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>spring-context<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>5.2.10.RELEASE<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>org.springframework<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>spring-web<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>5.2.10.RELEASE<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span>  <span class="token comment">&lt;!-- 重复的版本号 --&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>org.springframework<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>spring-jdbc<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>5.2.10.RELEASE<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span>  <span class="token comment">&lt;!-- 到处都要改 --&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependencies</span><span class="token punctuation">&gt;</span></span>
+</code></pre>
+<h3><a id="_276"></a>解决方案：自定义属性</h3>
+<pre><code class="prism language-xml"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>project</span><span class="token punctuation">&gt;</span></span>
+    <span class="token comment">&lt;!-- 定义属性 --&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>properties</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>spring.version</span><span class="token punctuation">&gt;</span></span>5.2.10.RELEASE<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>spring.version</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>mysql.version</span><span class="token punctuation">&gt;</span></span>8.0.30<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>mysql.version</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>maven.compiler.source</span><span class="token punctuation">&gt;</span></span>11<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>maven.compiler.source</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>maven.compiler.target</span><span class="token punctuation">&gt;</span></span>11<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>maven.compiler.target</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>properties</span><span class="token punctuation">&gt;</span></span>
+    
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependencies</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>org.springframework<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>spring-context<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>${spring.version}<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span>  <span class="token comment">&lt;!-- 引用属性 --&gt;</span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>mysql<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>mysql-connector-java<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>${mysql.version}<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependencies</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>project</span><span class="token punctuation">&gt;</span></span>
+</code></pre>
+<p><strong>好处</strong>：升级版本只需改一处！</p>
+<h3><a id="_305"></a>扩展：让属性在资源文件中生效</h3>
+<pre><code class="prism language-xml"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>build</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>resources</span><span class="token punctuation">&gt;</span></span>
+        <span class="token comment">&lt;!-- 设置资源目录并开启过滤功能 --&gt;</span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>resource</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>directory</span><span class="token punctuation">&gt;</span></span>src/main/resources<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>directory</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>filtering</span><span class="token punctuation">&gt;</span></span>true<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>filtering</span><span class="token punctuation">&gt;</span></span>  <span class="token comment">&lt;!-- 开启${}解析 --&gt;</span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>resource</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>resources</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>build</span><span class="token punctuation">&gt;</span></span>
+</code></pre>
+<p>然后在<code>application.properties</code>中就可以使用：</p>
+<pre><code class="prism language-properties">jdbc.driver=com.mysql.cj.jdbc.Driver
+jdbc.url=jdbc:mysql://localhost:3306/ssm_db
+jdbc.username=${db.username}  &lt;!-- 可以引用pom中的属性 --&gt;
+jdbc.password=${db.password}
+</code></pre>
+<hr>
+<h2><a id="_330"></a>六、私服：团队资源共享中心</h2>
+<h3><a id="_332"></a>故事高潮</h3>
+<p>随着团队规模扩大，问题越来越突出：</p>
+<ul>
+<li><strong>张三</strong>：开发了通用工具类，要分享给全公司</li>
+<li><strong>李四</strong>：需要Oracle驱动，中央仓库没有</li>
+<li><strong>王五</strong>：下载Spring依赖太慢，每次都要等很久</li>
+</ul>
+<p><strong>解决方案</strong>：搭建Maven私服！</p>
+<h3><a id="61__342"></a>6.1 什么是私服？</h3>
+<p>私服是公司内部搭建的Maven资源服务器，相当于<strong>公司内部的中央仓库</strong>。</p>
+<p><img src="https://i-blog.csdnimg.cn/direct/8caa83366fb44417a93a95c8239a2ba2.png" alt=""></p>
+<h3><a id="62__349"></a>6.2 私服仓库分类</h3>
+<p>私服中有三类仓库：</p>
+
+<table>
+<thead>
+<tr>
+<th>仓库类型</th>
+<th>说明</th>
+<th>存放内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>宿主仓库（hosted）</strong></td>
+<td>公司内部仓库</td>
+<td>自主研发的jar包、第三方商业包（如Oracle驱动）</td>
+</tr>
+<tr>
+<td><strong>代理仓库（proxy）</strong></td>
+<td>代理远程仓库</td>
+<td>从中央仓库下载的第三方jar包</td>
+</tr>
+<tr>
+<td><strong>仓库组（group）</strong></td>
+<td>仓库集合</td>
+<td>将多个仓库组合，对外提供统一访问入口</td>
+</tr>
+</tbody>
+</table><h3><a id="63_Maven_359"></a>6.3 本地Maven配置私服</h3>
+<h4><a id="1settingsxml_361"></a>步骤1：配置私服访问权限（settings.xml）</h4>
+<pre><code class="prism language-xml"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>servers</span><span class="token punctuation">&gt;</span></span>
+    <span class="token comment">&lt;!-- 快照版仓库权限 --&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>server</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>id</span><span class="token punctuation">&gt;</span></span>itheima-snapshot<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>id</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>username</span><span class="token punctuation">&gt;</span></span>admin<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>username</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>password</span><span class="token punctuation">&gt;</span></span>admin<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>password</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>server</span><span class="token punctuation">&gt;</span></span>
+    <span class="token comment">&lt;!-- 发布版仓库权限 --&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>server</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>id</span><span class="token punctuation">&gt;</span></span>itheima-release<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>id</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>username</span><span class="token punctuation">&gt;</span></span>admin<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>username</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>password</span><span class="token punctuation">&gt;</span></span>admin<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>password</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>server</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>servers</span><span class="token punctuation">&gt;</span></span>
+</code></pre>
+<h4><a id="2_380"></a>步骤2：配置私服镜像地址</h4>
+<pre><code class="prism language-xml"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>mirrors</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>mirror</span><span class="token punctuation">&gt;</span></span>
+        <span class="token comment">&lt;!-- 所有请求都走私服 --&gt;</span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>id</span><span class="token punctuation">&gt;</span></span>nexus-public<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>id</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>mirrorOf</span><span class="token punctuation">&gt;</span></span>*<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>mirrorOf</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>url</span><span class="token punctuation">&gt;</span></span>http://localhost:8081/repository/maven-public/<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>url</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>mirror</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>mirrors</span><span class="token punctuation">&gt;</span></span>
+</code></pre>
+<h4><a id="3pomxml_393"></a>步骤3：配置项目上传地址（pom.xml）</h4>
+<pre><code class="prism language-xml"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>distributionManagement</span><span class="token punctuation">&gt;</span></span>
+    <span class="token comment">&lt;!-- 快照版上传地址 --&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>snapshotRepository</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>id</span><span class="token punctuation">&gt;</span></span>itheima-snapshot<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>id</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>url</span><span class="token punctuation">&gt;</span></span>http://localhost:8081/repository/itheima-snapshot/<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>url</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>snapshotRepository</span><span class="token punctuation">&gt;</span></span>
+    <span class="token comment">&lt;!-- 发布版上传地址 --&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>repository</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>id</span><span class="token punctuation">&gt;</span></span>itheima-release<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>id</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>url</span><span class="token punctuation">&gt;</span></span>http://localhost:8081/repository/itheima-release/<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>url</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>repository</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>distributionManagement</span><span class="token punctuation">&gt;</span></span>
+</code></pre>
+<h3><a id="64__410"></a>6.4 上传与下载</h3>
+<p><strong>上传项目到私服</strong>：</p>
+<pre><code class="prism language-bash">mvn deploy
+</code></pre>
+<p><strong>从私服下载</strong>：<br>
+项目正常添加依赖，Maven会自动从私服下载！</p>
+<h3><a id="65_SNAPSHOT_vs_RELEASE_420"></a>6.5 SNAPSHOT vs RELEASE</h3>
+
+<table>
+<thead>
+<tr>
+<th>版本类型</th>
+<th>特点</th>
+<th>使用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>SNAPSHOT（快照版）</strong></td>
+<td>可重复覆盖，开发阶段使用</td>
+<td>团队协作开发中</td>
+</tr>
+<tr>
+<td><strong>RELEASE（发布版）</strong></td>
+<td>不可修改，正式发布</td>
+<td>项目上线后</td>
+</tr>
+</tbody>
+</table><hr>
+<h2><a id="Maven_429"></a>七、总结：Maven进阶知识图谱</h2>
+<pre><code class="prism language-markdown">┌─────────────────────────────────────────────────┐
+│                  Maven进阶                      │
+├─────────────────────────────────────────────────┤
+│                                                 │
+│  ┌──────────────┐    ┌──────────────────────┐  │
+│  │  模块化开发  │ → │    聚合与继承         │  │
+│  │  • 功能划分  │    │  • 统一构建          │  │
+│  │  • 分层架构  │    │  • 集中配置          │  │
+│  └──────────────┘    │  • 版本控制          │  │
+│         │            └──────────────────────┘  │
+│         ▼                      │               │
+│  ┌──────────────┐             ▼               │
+│  │  依赖管理    │      ┌──────────────────────┐  │
+│  │  • 路径优先  │      │      私服平台        │  │
+│  │  • 声明优先  │      │  • 中央仓库代理      │  │
+│  │  • 版本覆盖  │      │  • 仓库集群          │  │
+│  └──────────────┘      └──────────────────────┘  │
+│         │                      │               │
+│         ▼                      ▼               │
+│  ┌──────────────┐      ┌──────────────────────┐  │
+│  │  统一配置    │      │    协同开发          │  │
+│  │  • 版本管理  │      │  • 资源共享          │  │
+│  │  • 资源过滤  │      │  • 构建优化          │  │
+│  └──────────────┘      └──────────────────────┘  │
+└─────────────────────────────────────────────────┘
+</code></pre>
+<h3><a id="_458"></a>一句话总结</h3>
+<blockquote>
+<p><strong>分模块是基础，聚合继承是效率，私服是团队协作的保障！</strong></p>
+</blockquote>
+<p>掌握了这些Maven进阶技能，你就能从一个单打独斗的开发者，成长为企业级项目的架构师！</p>
+<hr>
+<h2><a id="Maven_466"></a>附录：常用Maven命令速查表</h2>
+
+<table>
+<thead>
+<tr>
+<th>命令</th>
+<th>作用</th>
+<th>使用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mvn clean</code></td>
+<td>清理target目录</td>
+<td>重新构建前</td>
+</tr>
+<tr>
+<td><code>mvn compile</code></td>
+<td>编译源代码</td>
+<td>检查语法错误</td>
+</tr>
+<tr>
+<td><code>mvn test</code></td>
+<td>运行测试</td>
+<td>单元测试</td>
+</tr>
+<tr>
+<td><code>mvn package</code></td>
+<td>打包成jar/war</td>
+<td>生成部署包</td>
+</tr>
+<tr>
+<td><code>mvn install</code></td>
+<td>安装到本地仓库</td>
+<td>供其他模块使用</td>
+</tr>
+<tr>
+<td><code>mvn deploy</code></td>
+<td>部署到私服</td>
+<td>团队共享</td>
+</tr>
+<tr>
+<td><code>mvn site</code></td>
+<td>生成项目文档</td>
+<td>项目报告</td>
+</tr>
+</tbody>
+</table><hr>
+<blockquote>
+<p>📝 <strong>写在最后</strong>：Maven不仅仅是一个构建工具，更是团队协作的基石。希望本文能帮助你从"会用"到"精通"，在实际项目中游刃有余！</p>
+</blockquote>
+</div>
+</body>
+
+</html>
