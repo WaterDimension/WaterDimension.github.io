@@ -1,0 +1,173 @@
+[
+  {
+    "id": "01-redis",
+    "title": "Redis缓存实战：更新策略与三大核心问题（穿透/雪崩/击穿）全解析（含面试重点）",
+    "category": "Redis",
+    "kind": "html",
+    "file": "01-redis.html",
+    "summary": "在分布式系统中，Redis作为高性能的分布式缓存，是提升系统并发能力、减轻数据库压力的核心组件。但缓存的使用并非“一存了之”，若不妥善处理缓存更新、缓存穿透、雪崩、击穿等问题，反而会引发系统性能瓶颈甚至服务宕机。本文将从缓存更新策略入手，深入拆解三大缓存问题的成因、解决方案，并结",
+    "size": 57962
+  },
+  {
+    "id": "02-autowired-resource-spring",
+    "title": "@Autowired与@Resource：Spring依赖注入注解核心差异剖析",
+    "category": "Spring",
+    "kind": "html",
+    "file": "02-autowired-resource-spring.html",
+    "summary": "在Spring/Spring Boot开发体系中，@Autowired和@Resource是实现依赖注入（DI）的核心注解，二者均能完成依赖对象的注入，但在设计背景、查找逻辑、使用方式等维度存在本质区别。这一知识点既是日常开发的高频考点，也是面试中考察Spring基础的经典问题，",
+    "size": 15360
+  },
+  {
+    "id": "03-git",
+    "title": "Git常用命令及使用场景",
+    "category": "工程化",
+    "kind": "md",
+    "file": "03-git.md",
+    "summary": "1.git branch a 创建分支",
+    "size": 21308
+  },
+  {
+    "id": "04-maven",
+    "title": "📦 Maven进阶：从单模块到企业级私服架构实战",
+    "category": "工程化",
+    "kind": "html",
+    "file": "04-maven.html",
+    "summary": "本文通过一个真实的团队开发故事，带你深入理解Maven的分模块开发、依赖冲突、聚合继承以及私服搭建等核心概念。",
+    "size": 52628
+  },
+  {
+    "id": "05-mysql",
+    "title": "🔥 MySQL事务核心知识大全",
+    "category": "数据库",
+    "kind": "html",
+    "file": "05-mysql.html",
+    "summary": "事务是一组操作的集合，它是一个不可分割的工作单位。事务会把所有的操作作为一个整体一起向系统提交或撤销，即这些操作要么同时成功，要么同时失败。",
+    "size": 22508
+  },
+  {
+    "id": "06-mysql",
+    "title": "🗄️ MySQL存储引擎核心知识",
+    "category": "数据库",
+    "kind": "html",
+    "file": "06-mysql.html",
+    "summary": "MySQL的架构可以分为四个层次，像一座四层大楼，每层各司其职：",
+    "size": 17354
+  },
+  {
+    "id": "07-redis",
+    "title": "Redis 分布式锁：初级实现的问题与分析",
+    "category": "Redis",
+    "kind": "html",
+    "file": "07-redis.html",
+    "summary": "userId.toString().intern() ：是在同一个jvm中的常量池中，同一个对象获取的锁才是相同的。 如果是在 集群环境下由于部署了多个tomcat，每个tomcat都有一个属于自己的jvm，同一个用户在不同jvm获取的锁也就是不同的了。",
+    "size": 43768
+  },
+  {
+    "id": "08-redis-lua",
+    "title": "Redis + Lua 实现秒杀优化",
+    "category": "Redis",
+    "kind": "md",
+    "file": "08-redis-lua.md",
+    "summary": "本章核心的算法逻辑与代码实现主要围绕 **异步秒杀优化** 方案展开，其核心在于利用 **Redis + Lua脚本** 实现原子化的库存与一人一单校验，并通过 **内存阻塞队列 + 异步线程** 将数据库持久化操作与前端响应解耦。以下是基于博客内容进行的深度拆解。",
+    "size": 14202
+  },
+  {
+    "id": "09-redisson",
+    "title": "Redisson 分布式锁复习总结",
+    "category": "Redis",
+    "kind": "html",
+    "file": "09-redisson.html",
+    "summary": "手动实现的 setnx 锁存在四大痛点，Redisson 逐一解决：",
+    "size": 21008
+  },
+  {
+    "id": "10-spring-transactional-1",
+    "title": "Spring 声明式事务 @Transactional 完整详解",
+    "category": "Spring",
+    "kind": "md",
+    "file": "10-spring-transactional-1.md",
+    "summary": "Spring 声明式事务是日常开发中**最常用、最核心、最容易踩坑**的技术点，尤其在秒杀、订单、转账等**高并发 + 数据一致性**业务中至关重要。",
+    "size": 24179
+  },
+  {
+    "id": "11-springboot-yaml",
+    "title": "SpringBoot YAML配置文件全解析：语法+读取+高级用法",
+    "category": "Spring",
+    "kind": "html",
+    "file": "11-springboot-yaml.html",
+    "summary": "本文针对SpringBoot开发中高频使用的YAML配置文件，从基础语法到数据读取全流程拆解，结合实战示例讲解，帮你彻底掌握YAML的核心用法。",
+    "size": 28506
+  },
+  {
+    "id": "12-tcp-ip-01",
+    "title": "🚀 TCP/IP 网络模型面试核心考点总结",
+    "category": "计算机网络",
+    "kind": "html",
+    "file": "12-tcp-ip-01.html",
+    "summary": "在传输层的语境下，“端”并不是指物理上的网线接口，而是指通信的最终起点和终点。 真正的“端”是进程： 应用层的各种应用程序（如浏览器、微信、王者荣耀）都是以进程的形式运行的。传输层的“端到端”，指的就是：",
+    "size": 14586
+  },
+  {
+    "id": "13-tcp-ip-02",
+    "title": "🚀 经典面试题：键入网址到网页显示，期间发生了什么？",
+    "category": "计算机网络",
+    "kind": "html",
+    "file": "13-tcp-ip-02.html",
+    "summary": "这条题目是考察网络基础的“大杀器”，核心流程可以概括为：应用层解析 -&gt; DNS 寻址 -&gt; 协议栈委托 -&gt; TCP 可靠传输 -&gt; IP 远程定位。",
+    "size": 6988
+  },
+  {
+    "id": "14-cookie-session",
+    "title": "万字干货｜Cookie与Session深度解析（从原理到实战，避坑指南全收录）",
+    "category": "Web基础",
+    "kind": "html",
+    "file": "14-cookie-session.html",
+    "summary": "作为后端/前端开发者，Cookie 和 Session 是绕不开的基础知识点——登录态维持、用户身份认证、个性化配置，几乎所有Web项目都离不开它们。但很多开发者只停留在“会用”的层面，对其底层原理、区别、安全隐患一知半解：",
+    "size": 58060
+  },
+  {
+    "id": "15-note-15",
+    "title": "算法基础模板大全（覆盖绝大多数基础算法）",
+    "category": "算法",
+    "kind": "md",
+    "file": "15-note-15.md",
+    "summary": "void quick_sort(int q[], int l, int r) {",
+    "size": 110896
+  },
+  {
+    "id": "16-redis-mysql-1",
+    "title": "解决 Redis 排序后 MySQL 查询乱序问题（通用版）",
+    "category": "Redis",
+    "kind": "md",
+    "file": "16-redis-mysql-1.md",
+    "summary": "在日常开发中，我们经常会遇到「需要按特定顺序展示数据」的场景——比如按点赞时间展示前N名用户、按操作时间展示最近操作记录、按热度排序展示内容等。为了提升性能，很多开发者会用Redis做排序存储，再用MySQL查询详细数据，但往往会遇到一个共性问题：Redis返回的顺序是正确的，可",
+    "size": 11234
+  },
+  {
+    "id": "17-aop",
+    "title": "超级实用的 AOP 指南",
+    "category": "Spring",
+    "kind": "md",
+    "file": "17-aop.md",
+    "summary": "这是一份**超级实用、你以后写项目直接照搬的 AOP 指南**，专门解决：",
+    "size": 12960
+  },
+  {
+    "id": "18-day02",
+    "title": "黑马点评 day02：缓存笔记",
+    "category": "项目实战",
+    "kind": "html",
+    "file": "18-day02.html",
+    "summary": "",
+    "size": 87776
+  },
+  {
+    "id": "19-day03",
+    "title": "黑马点评 day03：秒杀笔记",
+    "category": "项目实战",
+    "kind": "html",
+    "file": "19-day03.html",
+    "summary": "",
+    "size": 51126
+  }
+]

@@ -1,0 +1,206 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>@Autowired与@Resource：Spring依赖注入注解核心差异剖析</title>
+  <link rel="stylesheet" href="https://stackedit.io/style.css" />
+</head>
+
+<body class="stackedit">
+  <div class="stackedit__html"><h1><a id="AutowiredResourceSpring_0"></a>@Autowired与@Resource：Spring依赖注入注解核心差异剖析</h1>
+<p>在Spring/Spring Boot开发体系中，<code>@Autowired</code>和<code>@Resource</code>是实现依赖注入（DI）的核心注解，二者均能完成依赖对象的注入，但在设计背景、查找逻辑、使用方式等维度存在本质区别。这一知识点既是日常开发的高频考点，也是面试中考察Spring基础的经典问题，本文将从5个核心维度拆解二者的差异，帮助开发者精准掌握其使用场景。</p>
+<h2><a id="_vs__3"></a>一、注解来源：框架专属 vs 官方标准</h2>
+<p><code>@Autowired</code>和<code>@Resource</code>的核心定位差异，首先体现在其归属体系的不同：</p>
+<ul>
+<li><strong>@Autowired</strong>：是Spring框架原生定义的注解（全类名：<code>org.springframework.beans.factory.annotation.Autowired</code>），属于Spring生态的“专属工具”，仅能在Spring体系中生效。</li>
+<li><strong>@Resource</strong>：是Java官方规范定义的注解，源自JSR-250（Java Specification Requests 250，即Java规范提案），全类名：<code>javax.annotation.Resource</code>（JDK 9及以上版本需手动引入依赖）。作为Java标准注解，它可兼容所有支持JSR-250规范的框架，具备跨框架移植性。</li>
+</ul>
+<blockquote>
+<p>补充：JSR是Java技术规范的提案机制，任何组织或个人均可提交JSR提案，经官方审核通过后成为Java语言的标准规范，JSR-250正是其中关于注解规范的重要提案。</p>
+</blockquote>
+<h2><a id="_vs__10"></a>二、依赖查找逻辑：类型优先 vs 名称优先</h2>
+<p>依赖注入的本质是“从Spring IoC容器中查找目标Bean并注入”，而查找方式分为“按类型（byType）”和“按名称（byName）”两种，二者的查找优先级完全相反：</p>
+<h3><a id="1_Autowired_13"></a>1. @Autowired：先类型，后名称</h3>
+<p><code>@Autowired</code>的核心查找逻辑是<strong>先按类型匹配，类型匹配多个时再按名称匹配</strong>，具体流程：</p>
+<ol>
+<li>根据注入字段/方法参数的类型，在IoC容器中查找所有匹配类型的Bean；</li>
+<li>若找到<strong>唯一</strong>匹配的Bean，直接注入；</li>
+<li>若找到<strong>多个</strong>同类型Bean，则以注入变量名作为Bean名称，匹配容器中的Bean名称；</li>
+<li>若名称仍匹配失败，抛出<code>NoUniqueBeanDefinitionException</code>异常（可配合<code>@Qualifier</code>指定Bean名称解决）。</li>
+</ol>
+<p>该逻辑可通过Spring源码<code>org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor#postProcessPropertyValues</code>方法追溯，是Spring对依赖注入的核心实现逻辑。</p>
+<h3><a id="2_Resource_22"></a>2. @Resource：先名称，后类型</h3>
+<p><code>@Resource</code>的查找逻辑与<code>@Autowired</code>相反，<strong>先按名称匹配，名称匹配失败后再按类型匹配</strong>，具体流程：</p>
+<ol>
+<li>若指定了<code>name</code>参数，则直接按该名称查找Bean；</li>
+<li>若未指定<code>name</code>参数，则以注入变量名作为Bean名称查找；</li>
+<li>名称查找失败时，降级为按注入字段/参数的类型查找；</li>
+<li>若类型仍匹配失败，抛出<code>NoSuchBeanDefinitionException</code>异常。</li>
+</ol>
+<p>尽管<code>@Resource</code>是Java标准注解，但Spring框架对其提供了具体实现，核心源码可参考<code>org.springframework.context.annotation.CommonAnnotationBeanPostProcessor#postProcessPropertyValues</code>方法。</p>
+<h3><a id="3__31"></a>3. 查找逻辑小结</h3>
+
+<table>
+<thead>
+<tr>
+<th>注解</th>
+<th>查找优先级</th>
+<th>多Bean匹配处理方式</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>@Autowired</td>
+<td>类型（byType）→ 名称（byName）</td>
+<td>需配合<code>@Qualifier</code>指定Bean名称</td>
+</tr>
+<tr>
+<td>@Resource</td>
+<td>名称（byName）→ 类型（byType）</td>
+<td>直接通过<code>name</code>参数指定Bean名称</td>
+</tr>
+</tbody>
+</table><h2><a id="_vs__37"></a>三、可配置参数：极简 vs 灵活</h2>
+<p>二者支持的配置参数数量和用途差异显著，直接影响注入的精准度：</p>
+<h3><a id="1_Autowired1_40"></a>1. @Autowired：仅支持1个核心参数</h3>
+<p><code>@Autowired</code>仅提供<code>required</code>一个参数（布尔类型）：</p>
+<ul>
+<li>默认值：<code>true</code>，表示依赖Bean必须存在，若不存在则抛出异常；</li>
+<li>设为<code>false</code>时，若容器中无匹配Bean，注入值为<code>null</code>，不会抛出异常。<br>
+示例：</li>
+</ul>
+<pre><code class="prism language-java"><span class="token comment">// 非必须注入，无匹配Bean时为null</span>
+<span class="token annotation punctuation">@Autowired</span><span class="token punctuation">(</span>required <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">)</span>
+<span class="token keyword">private</span> <span class="token class-name">UserService</span> userService<span class="token punctuation">;</span>
+</code></pre>
+<h3><a id="2_Resource7_51"></a>2. @Resource：支持7个扩展参数</h3>
+<p><code>@Resource</code>提供7个可配置参数，核心常用的是以下2个：</p>
+<ul>
+<li><code>name</code>：指定要注入的Bean名称（精准匹配）；</li>
+<li><code>type</code>：指定要注入的Bean类型（限定类型匹配）；<br>
+其余参数（如<code>lookupName</code>、<code>mappedName</code>等）为扩展属性，日常开发极少使用。<br>
+示例：</li>
+</ul>
+<pre><code class="prism language-java"><span class="token comment">// 同时指定名称和类型，精准注入</span>
+<span class="token annotation punctuation">@Resource</span><span class="token punctuation">(</span>name <span class="token operator">=</span> <span class="token string">"userInfoService"</span><span class="token punctuation">,</span> type <span class="token operator">=</span> <span class="token class-name">UserInfoService</span><span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span>
+<span class="token keyword">private</span> <span class="token class-name">UserInfoService</span> userService<span class="token punctuation">;</span>
+</code></pre>
+<h2><a id="_vs__63"></a>四、注入方式支持：全量兼容 vs 部分支持</h2>
+<p>Spring中依赖注入的常见实现方式有3种：属性注入、构造方法注入、Setter注入，二者的支持范围不同：</p>
+<h3><a id="1__66"></a>1. 三种注入方式的实现示例</h3>
+<h4><a id="1_67"></a>（1）属性注入（二者均支持）</h4>
+<pre><code class="prism language-java"><span class="token annotation punctuation">@RestController</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">UserController</span> <span class="token punctuation">{</span>
+    <span class="token comment">// @Autowired 属性注入</span>
+    <span class="token annotation punctuation">@Autowired</span>
+    <span class="token keyword">private</span> <span class="token class-name">UserService</span> userService<span class="token punctuation">;</span>
+
+    <span class="token comment">// @Resource 属性注入</span>
+    <span class="token annotation punctuation">@Resource</span>
+    <span class="token keyword">private</span> <span class="token class-name">UserService</span> userService2<span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@RequestMapping</span><span class="token punctuation">(</span><span class="token string">"/add"</span><span class="token punctuation">)</span>
+    <span class="token keyword">public</span> <span class="token class-name">UserInfo</span> <span class="token function">add</span><span class="token punctuation">(</span><span class="token class-name">String</span> username<span class="token punctuation">,</span> <span class="token class-name">String</span> password<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> userService<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>username<span class="token punctuation">,</span> password<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h4><a id="2Setter_86"></a>（2）Setter注入（二者均支持）</h4>
+<pre><code class="prism language-java"><span class="token annotation punctuation">@RestController</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">UserController</span> <span class="token punctuation">{</span>
+    <span class="token keyword">private</span> <span class="token class-name">UserService</span> userService<span class="token punctuation">;</span>
+    <span class="token keyword">private</span> <span class="token class-name">UserService</span> userService2<span class="token punctuation">;</span>
+
+    <span class="token comment">// @Autowired Setter注入</span>
+    <span class="token annotation punctuation">@Autowired</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">setUserService</span><span class="token punctuation">(</span><span class="token class-name">UserService</span> userService<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>userService <span class="token operator">=</span> userService<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment">// @Resource Setter注入</span>
+    <span class="token annotation punctuation">@Resource</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">setUserService2</span><span class="token punctuation">(</span><span class="token class-name">UserService</span> userService<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>userService2 <span class="token operator">=</span> userService<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h4><a id="3Autowired_107"></a>（3）构造方法注入（仅@Autowired支持）</h4>
+<pre><code class="prism language-java"><span class="token annotation punctuation">@RestController</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">UserController</span> <span class="token punctuation">{</span>
+    <span class="token keyword">private</span> <span class="token class-name">UserService</span> userService<span class="token punctuation">;</span>
+
+    <span class="token comment">// 合法：@Autowired 构造方法注入</span>
+    <span class="token annotation punctuation">@Autowired</span>
+    <span class="token keyword">public</span> <span class="token class-name">UserController</span><span class="token punctuation">(</span><span class="token class-name">UserService</span> userService<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>userService <span class="token operator">=</span> userService<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment">// 非法：@Resource 不支持构造方法注入，编译/运行报错</span>
+    <span class="token comment">// @Resource</span>
+    <span class="token comment">// public UserController(UserService userService) {</span>
+    <span class="token comment">//     this.userService = userService;</span>
+    <span class="token comment">// }</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h3><a id="2__127"></a>2. 注入方式支持小结</h3>
+
+<table>
+<thead>
+<tr>
+<th>注入方式</th>
+<th>@Autowired</th>
+<th>@Resource</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>属性注入</td>
+<td>✅ 支持</td>
+<td>✅ 支持</td>
+<td>最常用的注入方式</td>
+</tr>
+<tr>
+<td>Setter注入</td>
+<td>✅ 支持</td>
+<td>✅ 支持</td>
+<td>符合JavaBean规范</td>
+</tr>
+<tr>
+<td>构造方法注入</td>
+<td>✅ 支持</td>
+<td>❌ 不支持</td>
+<td>@Resource使用会直接报错</td>
+</tr>
+</tbody>
+</table><h2><a id="IDE_vs__134"></a>五、IDE编译提示：有警告 vs 无提示</h2>
+<p>在IDEA（尤其是专业版）开发中，二者的语法检查提示存在明显差异，核心体现在Mapper接口注入场景：</p>
+<ul>
+<li><strong>@Autowired</strong>：注入MyBatis Mapper接口时，IDEA会提示“Could not autowire. No beans of ‘XXXMapper’ type found”警告。这是因为Mapper接口由MyBatis动态代理生成Bean，IDEA静态扫描无法识别，但程序<strong>实际运行不受影响</strong>。</li>
+<li><strong>@Resource</strong>：注入Mapper接口时无任何警告提示，语法检查更友好。</li>
+</ul>
+<blockquote>
+<p>解决方案：若想消除@Autowired的警告，可给Mapper接口添加<code>@Repository</code>注解，或在IDEA中关闭“Spring Core → Autowiring for Bean Class”的检查规则。</p>
+</blockquote>
+<h2><a id="_141"></a>核心总结</h2>
+<p><code>@Autowired</code>和<code>@Resource</code>虽均实现依赖注入，但核心差异可归纳为5点：</p>
+<ol>
+<li><strong>来源不同</strong>：@Autowired是Spring专属，@Resource是Java标准注解；</li>
+<li><strong>查找逻辑</strong>：@Autowired先类型后名称，@Resource先名称后类型；</li>
+<li><strong>配置参数</strong>：@Autowired仅支持<code>required</code>参数，@Resource支持7个扩展参数；</li>
+<li><strong>注入方式</strong>：@Autowired支持构造方法注入，@Resource仅支持属性/Setter注入；</li>
+<li><strong>IDE提示</strong>：注入Mapper时@Autowired有警告，@Resource无提示。</li>
+</ol>
+<h3><a id="_149"></a>最佳实践建议</h3>
+<ul>
+<li>Spring纯生态项目：优先使用<code>@Autowired</code>（配合<code>@Qualifier</code>处理多Bean），贴合Spring原生逻辑；</li>
+<li>跨框架移植/Mapper注入：优先使用<code>@Resource</code>，兼容性更好且无IDE警告；</li>
+<li>构造方法注入场景：必须使用<code>@Autowired</code>（@Resource不支持）；</li>
+<li>精准指定Bean名称：优先使用<code>@Resource</code>（无需额外注解，更简洁）。</li>
+</ul>
+</div>
+</body>
+
+</html>

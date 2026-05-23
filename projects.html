@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>项目 · frank</title>
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body data-page="projects">
+  <header class="site-header"></header>
+
+  <main>
+    <section class="page-intro">
+      <div class="container">
+        <div class="crumb">Projects</div>
+        <h1>项目作品集</h1>
+        <p>来自 <a href="https://github.com/WaterDimension" target="_blank" rel="noopener">GitHub @WaterDimension</a>，含课程项目、毕设、学习实验与日常练手。</p>
+      </div>
+    </section>
+
+    <section class="block" style="padding-top:24px">
+      <div class="container">
+        <input class="searchbar" id="search" type="search" placeholder="🔍 搜索项目名 / 描述 / 技术栈" />
+        <div class="filters" id="lang-filters"></div>
+        <div class="grid projects" id="projects"></div>
+        <div class="empty" id="empty" style="display:none">没有匹配的项目，换个关键词试试。</div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer"></footer>
+
+  <script src="assets/main.js"></script>
+  <script>
+    (async function () {
+      const data = await loadJSON("data/site.json");
+      const projects = data.projects
+        .slice()
+        .sort((a, b) => (b.stars || 0) - (a.stars || 0) || (b.updated_at || "").localeCompare(a.updated_at || ""));
+      const grid = document.getElementById("projects");
+      const empty = document.getElementById("empty");
+      const search = document.getElementById("search");
+      const langFilters = document.getElementById("lang-filters");
+
+      const langs = Array.from(new Set(projects.map(p => p.language).filter(Boolean))).sort();
+      let activeLang = "全部";
+      let q = "";
+
+      function renderFilters() {
+        const all = ["全部", ...langs];
+        langFilters.innerHTML = all.map(l =>
+          `<button class="chip ${l === activeLang ? "on" : ""}" data-lang="${escapeHtml(l)}">${escapeHtml(l)}</button>`
+        ).join("");
+        langFilters.querySelectorAll(".chip").forEach(b => {
+          b.addEventListener("click", () => {
+            activeLang = b.dataset.lang;
+            renderFilters();
+            renderProjects();
+          });
+        });
+      }
+
+      function renderProjects() {
+        const filtered = projects.filter(p => {
+          if (activeLang !== "全部" && p.language !== activeLang) return false;
+          if (q) {
+            const blob = (p.name + " " + (p.description || "") + " " + (p.highlight || "") + " " + (p.language || "")).toLowerCase();
+            if (!blob.includes(q.toLowerCase())) return false;
+          }
+          return true;
+        });
+        empty.style.display = filtered.length ? "none" : "block";
+        grid.innerHTML = filtered.map(p => `
+          <a class="card" href="${p.url}" target="_blank" rel="noopener">
+            <div class="head">
+              <h3>${escapeHtml(p.name)}</h3>
+              <span class="stars" title="stars">★ ${p.stars}</span>
+            </div>
+            <p class="desc">${escapeHtml(p.description || p.highlight || "暂无描述")}</p>
+            ${p.highlight ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${
+              p.highlight.split("·").map(s => s.trim()).filter(Boolean).map(s =>
+                `<span class="tag">${escapeHtml(s)}</span>`).join("")
+            }</div>` : ""}
+            <div class="meta">
+              ${p.language ? `<span class="lang">${langDot(p.language)} ${escapeHtml(p.language)}</span>` : ""}
+              <span>更新于 ${relativeDate(p.updated_at)}</span>
+            </div>
+          </a>
+        `).join("");
+      }
+
+      search.addEventListener("input", e => { q = e.target.value.trim(); renderProjects(); });
+      renderFilters();
+      renderProjects();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,174 @@
+{
+  "profile": {
+    "name": "frank",
+    "login": "WaterDimension",
+    "bio": "中北大学在读 · 后端 / Java · 喜欢造轮子，记笔记。",
+    "avatar": "https://avatars.githubusercontent.com/u/169778508?v=4",
+    "github": "https://github.com/WaterDimension",
+    "tagline": "构建 · 学习 · 分享",
+    "skills": [
+      "Java",
+      "Spring Boot",
+      "Spring Data JPA",
+      "Spring AI",
+      "MyBatis-Plus",
+      "Redis",
+      "MySQL",
+      "RocketMQ",
+      "Kafka",
+      "Elasticsearch",
+      "MinIO",
+      "Maven",
+      "Python",
+      "PyTorch",
+      "scikit-learn",
+      "Linux",
+      "Git"
+    ]
+  },
+  "projects": [
+    {
+      "name": "Smart_RAG_System",
+      "description": "基于 Spring AI 的智能 RAG（检索增强生成）系统，结合向量库与大模型实现企业知识库问答。",
+      "language": "Java",
+      "url": "https://github.com/WaterDimension/Smart_RAG_System",
+      "stars": 1,
+      "updated_at": "2026-05-16T13:56:02Z",
+      "topics": [],
+      "homepage": "",
+      "highlight": "Spring Boot · Spring AI · RAG · 向量检索"
+    },
+    {
+      "name": "Dianping",
+      "description": "黑马点评",
+      "language": "Java",
+      "url": "https://github.com/WaterDimension/Dianping",
+      "stars": 0,
+      "updated_at": "2026-04-01T13:33:31Z",
+      "topics": [],
+      "homepage": "",
+      "highlight": "Spring Boot · Redis · MySQL"
+    },
+    {
+      "name": "takeaway",
+      "description": "苍穹外卖",
+      "language": "",
+      "url": "https://github.com/WaterDimension/takeaway",
+      "stars": 1,
+      "updated_at": "2026-01-06T11:30:41Z",
+      "topics": [],
+      "homepage": "",
+      "highlight": "Spring Boot · MyBatis-Plus"
+    },
+    {
+      "name": "AnimalObjectDetect-YOLOv12",
+      "description": "基于 YOLOv12 的动物目标检测项目，含训练、推理与评估流程。",
+      "language": "Python",
+      "url": "https://github.com/WaterDimension/AnimalObjectDetect-YOLOv12",
+      "stars": 1,
+      "updated_at": "2026-05-15T11:30:33Z",
+      "topics": [],
+      "homepage": "",
+      "highlight": "PyTorch · YOLO · 目标检测"
+    },
+    {
+      "name": "Visualization-and-Analysis-of-Tourism-GDP-Data",
+      "description": "旅游业 GDP 数据可视化与分析，使用前端图表呈现多维趋势。",
+      "language": "HTML",
+      "url": "https://github.com/WaterDimension/Visualization-and-Analysis-of-Tourism-GDP-Data",
+      "stars": 0,
+      "updated_at": "2026-05-15T11:30:00Z",
+      "topics": [],
+      "homepage": "",
+      "highlight": "数据可视化 · ECharts · HTML"
+    },
+    {
+      "name": "pingpong-match",
+      "description": "微信的乒乓球约战小程序，采用云开发",
+      "language": "JavaScript",
+      "url": "https://github.com/WaterDimension/pingpong-match",
+      "stars": 0,
+      "updated_at": "2026-05-15T11:31:51Z",
+      "topics": [],
+      "homepage": "",
+      "highlight": "微信小程序 · 云开发"
+    },
+    {
+      "name": "Rocketmq_learn",
+      "description": "rocketmq的学习代码",
+      "language": "Java",
+      "url": "https://github.com/WaterDimension/Rocketmq_learn",
+      "stars": 0,
+      "updated_at": "2026-04-02T14:04:52Z",
+      "topics": [],
+      "homepage": "",
+      "highlight": "RocketMQ · 消息中间件"
+    },
+    {
+      "name": "medical_final",
+      "description": "医学影像 / 数据相关的毕设项目，包含训练脚本与可视化分析。",
+      "language": "Python",
+      "url": "https://github.com/WaterDimension/medical_final",
+      "stars": 6,
+      "updated_at": "2026-05-15T16:23:15Z",
+      "topics": [],
+      "homepage": "",
+      "highlight": "Python · 数据分析 · 模型训练"
+    },
+    {
+      "name": "Faclity",
+      "description": "Java 后台服务实践项目，覆盖典型企业级业务场景。",
+      "language": "Java",
+      "url": "https://github.com/WaterDimension/Faclity",
+      "stars": 0,
+      "updated_at": "2026-05-15T13:02:46Z",
+      "topics": [],
+      "homepage": "",
+      "highlight": "Java · Spring"
+    },
+    {
+      "name": "sk-Learn-project",
+      "description": "scikit-learn 学习与实验代码合集，覆盖经典机器学习算法实践。",
+      "language": "",
+      "url": "https://github.com/WaterDimension/sk-Learn-project",
+      "stars": 0,
+      "updated_at": "2026-05-08T11:05:18Z",
+      "topics": [],
+      "homepage": "",
+      "highlight": "Python · scikit-learn"
+    },
+    {
+      "name": "python",
+      "description": "Python 学习与小工具集合。",
+      "language": "",
+      "url": "https://github.com/WaterDimension/python",
+      "stars": 0,
+      "updated_at": "2026-02-28T11:37:41Z",
+      "topics": [],
+      "homepage": "",
+      "highlight": "Python"
+    },
+    {
+      "name": "luogu",
+      "description": "洛谷 OJ 题解与算法练习代码。",
+      "language": "C++",
+      "url": "https://github.com/WaterDimension/luogu",
+      "stars": 0,
+      "updated_at": "2025-05-13T13:49:16Z",
+      "topics": [],
+      "homepage": "",
+      "highlight": "C++ · 算法"
+    },
+    {
+      "name": "pqgrame",
+      "description": "小型练习项目。",
+      "language": "",
+      "url": "https://github.com/WaterDimension/pqgrame",
+      "stars": 0,
+      "updated_at": "2025-06-29T16:29:36Z",
+      "topics": [],
+      "homepage": "",
+      "highlight": "练习项目"
+    }
+  ]
+}

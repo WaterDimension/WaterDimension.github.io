@@ -1,0 +1,143 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TCP/IP 网络模型面试核心考点总结02（基础篇）</title>
+  <link rel="stylesheet" href="https://stackedit.io/style.css" />
+</head>
+
+<body class="stackedit">
+  <div class="stackedit__html"><h1><a id="__1"></a>🚀 经典面试题：键入网址到网页显示，期间发生了什么？</h1>
+<p>这条题目是考察网络基础的“大杀器”，核心流程可以概括为：<strong>应用层解析 -&gt; DNS 寻址 -&gt; 协议栈委托 -&gt; TCP 可靠传输 -&gt; IP 远程定位</strong>。</p>
+<hr>
+<h2><a id="1_HTTP_7"></a>1. 第一步：应用层解析（HTTP）</h2>
+<ul>
+<li><strong>解析 URL</strong>：浏览器提取出 **Web 服务器名（域名）**和 <strong>文件名（资源路径）</strong>。
+<ul>
+<li>若路径省略，默认请求 <code>/index.html</code>。</li>
+</ul>
+</li>
+<li><strong>生成 HTTP 请求</strong>：浏览器根据解析结果生成包含方法（GET/POST）、路径、协议版本、Header 的 HTTP 报文。</li>
+</ul>
+<hr>
+<h2><a id="2_DNS__14"></a>2. 第二步：真实地址查询（DNS）—— “指路不带路”</h2>
+<p>在委托操作系统发包前，必须获取目标服务器的 <strong>IP 地址</strong>。</p>
+<h3><a id="_DNS__17"></a>📌 核心疑问解答：DNS 根域服务器到底怎么理解？</h3>
+<ol>
+<li><strong>天生认知</strong>：全世界所有 DNS 服务器出厂/配置时，就<strong>内置固化</strong>了根域 DNS 服务器的 IP 地址。</li>
+<li><strong>树状层级</strong>：<code>.</code> (根) -&gt; <code>.com</code> (顶级域) -&gt; <code>baidu.com</code> (权威域)。</li>
+<li><strong>查询流程（面试必考）</strong>：
+<ul>
+<li><strong>缓存查找</strong>：浏览器缓存 -&gt; 操作系统缓存 -&gt; Hosts 文件 -&gt; 本地 DNS 服务器（LDNS）。</li>
+<li><strong>递归与迭代</strong>：若 LDNS 无缓存，它会依次询问：<strong>根 DNS</strong>（指引 TLD） -&gt; <strong>顶级域 DNS</strong>（指引权威） -&gt; <strong>权威 DNS</strong>（给出最终 IP）。</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h2><a id="3_TCP__IP_26"></a>3. 第三步：协议栈的指南针（TCP 与 IP）</h2>
+<p>获取 IP 后，浏览器通过调用 <strong>Socket 库</strong> 委托操作系统协议栈工作。</p>
+<h3><a id="_TCP_29"></a>🛠️ 传输层：可靠性（TCP）</h3>
+<ul>
+<li><strong>TCP 头部关键字段</strong>：
+<ul>
+<li><strong>端口号</strong>：源端口（随机）+ 目标端口（HTTP 80 / HTTPS 443）。</li>
+<li><strong>序列号 (Seq)</strong>：解决乱序问题。</li>
+<li><strong>确认号 (Ack)</strong>：解决丢包重传问题。</li>
+<li><strong>窗口大小</strong>：流量控制。</li>
+</ul>
+</li>
+<li><strong>TCP 三次握手（核心中的核心）</strong>：
+<ol>
+<li><strong>C -&gt; S (SYN)</strong>：携带客户端 ISN_C。</li>
+<li><strong>S -&gt; C (SYN+ACK)</strong>：确认 C 的 SYN，携带服务端 ISN_S。</li>
+<li><strong>C -&gt; S (ACK)</strong>：确认 S 的 SYN，双方进入 ESTABLISHED。</li>
+</ol>
+<ul>
+<li><strong>为什么需要三次？</strong> 确认双方双向收发能力；防止旧连接混淆。</li>
+</ul>
+</li>
+<li><strong>数据分割</strong>：若数据超过 <strong>MSS</strong>（最大报文长度），TCP 会将其拆分成一个个 <strong>Segment</strong>。</li>
+</ul>
+<h3><a id="_IP_42"></a>🛠️ 网络层：远程定位（IP）</h3>
+<ul>
+<li><strong>IP 头部关键字段</strong>：
+<ul>
+<li><strong>源 IP + 目的 IP</strong>。</li>
+<li><strong>协议号</strong>：TCP 对应 <code>06</code>。</li>
+</ul>
+</li>
+<li><strong>源地址选择（路由表）</strong>：
+<ul>
+<li>操作系统通过 <code>route -n</code> 查看路由表。</li>
+<li>将目的 IP 与各条目<strong>子网掩码</strong>进行 <strong>与运算</strong>，匹配 Destination。</li>
+<li>若无匹配，则走 <strong>默认网关 (0.0.0.0)</strong>。</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h2><a id="4__53"></a>4. 总结与数据包封装全貌</h2>
+
+<table>
+<thead>
+<tr>
+<th align="left">层级</th>
+<th align="left">增加的内容</th>
+<th align="left">赋予的能力</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left"><strong>应用层</strong></td>
+<td align="left">HTTP 报文</td>
+<td align="left">定义业务逻辑（我要什么资源）</td>
+</tr>
+<tr>
+<td align="left"><strong>传输层</strong></td>
+<td align="left"><strong>TCP 头部</strong></td>
+<td align="left"><strong>可靠传输</strong>：保证不丢包、不乱序（端口定位应用）</td>
+</tr>
+<tr>
+<td align="left"><strong>网络层</strong></td>
+<td align="left"><strong>IP 头部</strong></td>
+<td align="left"><strong>远程定位</strong>：通过路由表决定“下一跳”去哪</td>
+</tr>
+<tr>
+<td align="left"><strong>网络接口层</strong></td>
+<td align="left">MAC 头部</td>
+<td align="left"><strong>本地链路传输</strong>：在以太网内点对点传输</td>
+</tr>
+</tbody>
+</table><hr>
+<h2><a id="__QA__64"></a>💡 面试高频 Q&amp;A (基于面经总结)</h2>
+<p><strong>Q1：为什么有了 IP 还需要 MAC 地址？（对应资料中 IP/MAC 部分）</strong></p>
+<blockquote>
+<p><strong>A</strong>：IP 地址负责全局路径选择（规划路线），MAC 地址负责局域网内的硬件点对点跳转（实际踩油门转弯）。在以太网中，数据包必须封装 MAC 头才能被交换机识别。</p>
+</blockquote>
+<p><strong>Q2：传输层下面是网络层，发送端和接收端在网络层有联系吗？</strong></p>
+<blockquote>
+<p><strong>A</strong>：<strong>没有联系。</strong> 网络层（IP）是“无连接”的，它只负责尽力而为地把包送到目的地。所谓的“连接”是**传输层（TCP）**通过维护状态机（三次握手）在逻辑上建立的。</p>
+</blockquote>
+<p><strong>Q3：什么是 MTU 和 MSS？</strong></p>
+<blockquote>
+<p><strong>A</strong>：</p>
+<ul>
+<li><strong>MTU</strong>：最大传输单元，以太网通常为 1500 字节（包含 IP 和 TCP 头）。</li>
+<li><strong>MSS</strong>：最大报文段长度，是 TCP 扣除头部后能装载的净数据大小。TCP 在分段时会参考 MSS，防止在 IP 层被二次分片导致效率降低。</li>
+</ul>
+</blockquote>
+<p><strong>Q4：DNS 查找是递归还是迭代？</strong></p>
+<blockquote>
+<p><strong>A</strong>：</p>
+<ul>
+<li><strong>电脑到本地 DNS</strong>：通常是<strong>递归查询</strong>（你帮我查到底）。</li>
+<li><strong>本地 DNS 到根/顶级/权威 DNS</strong>：通常是<strong>迭代查询</strong>（它告诉你下一步问谁，你亲自去问）。</li>
+</ul>
+</blockquote>
+<hr>
+<p><strong>复习小贴士</strong>：面试时建议边画图边讲解，特别是从 URL 解析到 TCP 三次握手，再到路由表匹配的逻辑，这能展现你对计算机网络体系结构的深度掌握。</p>
+</div>
+</body>
+
+</html>

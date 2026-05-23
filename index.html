@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>frank · 个人主页</title>
+  <meta name="description" content="frank（WaterDimension）的个人主页：项目作品、技术笔记。" />
+  <link rel="preconnect" href="https://avatars.githubusercontent.com" crossorigin />
+  <link rel="stylesheet" href="assets/style.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23c2410c'/%3E%3Ctext x='16' y='22' font-size='18' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='700'%3EW%3C/text%3E%3C/svg%3E" />
+</head>
+<body data-page="home">
+  <header class="site-header"></header>
+
+  <main>
+    <section class="hero">
+      <div class="container hero-inner">
+        <div>
+          <p class="title" style="font-size:13px;text-transform:uppercase;letter-spacing:0.18em;color:var(--brand);font-weight:700;margin:0 0 14px">
+            Hi, I'm frank
+          </p>
+          <h1>把<span class="accent">想法</span>写成代码<br/>把<span class="accent">学到的</span>记成笔记</h1>
+          <p class="lead">中北大学在读 · 后端方向，热衷于 Java / Spring 生态、分布式与中间件，也在玩 Python、AI 与小程序。这里是我整理项目作品和技术笔记的小角落。</p>
+          <div class="hero-cta">
+            <a class="btn btn-primary" href="projects.html">浏览项目 →</a>
+            <a class="btn btn-ghost" href="notes.html">阅读笔记</a>
+            <a class="btn btn-ghost" href="https://github.com/WaterDimension" target="_blank" rel="noopener">GitHub</a>
+          </div>
+        </div>
+        <div class="hero-side">
+          <div class="avatar-card" id="profileCard">
+            <div class="row">
+              <img src="https://avatars.githubusercontent.com/u/169778508?v=4" alt="frank avatar" />
+              <div>
+                <div class="name">frank</div>
+                <div class="login">@WaterDimension</div>
+              </div>
+            </div>
+            <div class="stat-grid">
+              <div class="stat"><div class="num" id="stat-repos">—</div><div class="lbl">公开仓库</div></div>
+              <div class="stat"><div class="num" id="stat-notes">—</div><div class="lbl">笔记</div></div>
+              <div class="stat"><div class="num" id="stat-stars">—</div><div class="lbl">总 Star</div></div>
+            </div>
+            <div class="skill-row" id="skill-row"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <div class="title">Featured Projects</div>
+            <h2>近期项目</h2>
+            <p>从企业级 Java 后端到机器学习与小程序，挑了几个我比较喜欢的。</p>
+          </div>
+          <a class="see-all" href="projects.html">查看全部 →</a>
+        </div>
+        <div class="grid projects" id="featured-projects"></div>
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <div class="title">Recent Notes</div>
+            <h2>近期笔记</h2>
+            <p>把课堂、面试、踩坑过程中的知识点反复打磨成可复用的笔记。</p>
+          </div>
+          <a class="see-all" href="notes.html">查看全部 →</a>
+        </div>
+        <div class="grid notes" id="featured-notes"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer"></footer>
+
+  <script src="assets/main.js"></script>
+  <script>
+    (async function () {
+      try {
+        const [site, notes] = await Promise.all([
+          loadJSON("data/site.json"),
+          loadJSON("data/notes.json"),
+        ]);
+
+        document.getElementById("stat-repos").textContent = site.projects.length;
+        document.getElementById("stat-notes").textContent = notes.length;
+        document.getElementById("stat-stars").textContent =
+          site.projects.reduce((sum, p) => sum + (p.stars || 0), 0);
+
+        const skillRow = document.getElementById("skill-row");
+        skillRow.innerHTML = site.profile.skills.slice(0, 9)
+          .map((s, i) => `<span class="tag${i < 3 ? " brand" : ""}">${escapeHtml(s)}</span>`)
+          .join("");
+
+        const featured = site.projects
+          .slice()
+          .sort((a, b) => (b.stars || 0) - (a.stars || 0) || (b.updated_at || "").localeCompare(a.updated_at || ""))
+          .slice(0, 6);
+        document.getElementById("featured-projects").innerHTML = featured.map(p => `
+          <a class="card" href="${p.url}" target="_blank" rel="noopener">
+            <div class="head">
+              <h3>${escapeHtml(p.name)}</h3>
+              <span class="stars" title="stars">★ ${p.stars}</span>
+            </div>
+            <p class="desc">${escapeHtml(p.description || p.highlight || "暂无描述")}</p>
+            <div class="meta">
+              ${p.language ? `<span class="lang">${langDot(p.language)} ${escapeHtml(p.language)}</span>` : ""}
+              <span>更新于 ${relativeDate(p.updated_at)}</span>
+            </div>
+          </a>
+        `).join("");
+
+        const recentNotes = notes.slice().sort((a, b) => a.id < b.id ? 1 : -1).slice(0, 6);
+        document.getElementById("featured-notes").innerHTML = recentNotes.map(n => `
+          <a class="card note-card" href="note.html?id=${encodeURIComponent(n.id)}">
+            <span class="cat">${escapeHtml(n.category)}</span>
+            <h3>${escapeHtml(n.title)}</h3>
+            <p class="summary">${escapeHtml(n.summary || "")}</p>
+          </a>
+        `).join("");
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+  </script>
+</body>
+</html>

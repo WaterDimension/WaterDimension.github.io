@@ -1,0 +1,378 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Redisson 分布式锁复习总结</title>
+  <link rel="stylesheet" href="https://stackedit.io/style.css" />
+</head>
+
+<body class="stackedit">
+  <div class="stackedit__html"><h1><a id="Redisson__0"></a>Redisson 分布式锁复习总结</h1>
+<h2><a id="__Redisson_setnx__1"></a>一、 为什么需要 Redisson？（基于 setnx 的问题）</h2>
+<p>手动实现的 <code>setnx</code> 锁存在四大痛点，Redisson 逐一解决：</p>
+
+<table>
+<thead>
+<tr>
+<th align="left">痛点</th>
+<th align="left">描述</th>
+<th align="left">Redisson 解决方案</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left"><strong>不可重入</strong></td>
+<td align="left">同一个线程无法多次获取同一把锁，导致嵌套调用死锁。</td>
+<td align="left"><strong>Hash 结构存储计数器</strong>，支持同一线程多次加锁。</td>
+</tr>
+<tr>
+<td align="left"><strong>不可重试</strong></td>
+<td align="left">获取锁失败直接返回，无重试机制。</td>
+<td align="left"><strong>tryLock 方法</strong>支持等待时间，内部通过订阅与自旋实现重试。</td>
+</tr>
+<tr>
+<td align="left"><strong>超时释放</strong></td>
+<td align="left">业务执行时间 &gt; 锁过期时间，导致锁自动释放，安全隐患。</td>
+<td align="left"><strong>WatchDog（看门狗）机制</strong>，自动续期，默认每 10s 续约至 30s。</td>
+</tr>
+<tr>
+<td align="left"><strong>主从一致性</strong></td>
+<td align="left">主节点写入锁后宕机，未同步到从节点，导致锁丢失。</td>
+<td align="left"><strong>MultiLock（联锁）</strong>，将多个 Redis 节点视为独立节点，须全部加锁成功。</td>
+</tr>
+</tbody>
+</table><hr>
+<h2><a id="__10"></a>二、 快速入门与基本使用</h2>
+<h3><a id="1__11"></a>1. 依赖与配置</h3>
+<pre><code class="prism language-xml"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>org.redisson<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>redisson<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>3.13.6<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+</code></pre>
+<pre><code class="prism language-java"><span class="token annotation punctuation">@Configuration</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">RedissonConfig</span> <span class="token punctuation">{</span>
+    <span class="token annotation punctuation">@Bean</span>
+    <span class="token keyword">public</span> <span class="token class-name">RedissonClient</span> <span class="token function">redissonClient</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{</span>
+        <span class="token class-name">Config</span> config <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Config</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        config<span class="token punctuation">.</span><span class="token function">useSingleServer</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">setAddress</span><span class="token punctuation">(</span><span class="token string">"redis://192.168.150.101:6379"</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">setPassword</span><span class="token punctuation">(</span><span class="token string">"123321"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> <span class="token class-name">Redisson</span><span class="token punctuation">.</span><span class="token function">create</span><span class="token punctuation">(</span>config<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h3><a id="2__30"></a>2. 核心代码模板</h3>
+<pre><code class="prism language-java"><span class="token class-name">RLock</span> lock <span class="token operator">=</span> redissonClient<span class="token punctuation">.</span><span class="token function">getLock</span><span class="token punctuation">(</span><span class="token string">"lock:order:"</span> <span class="token operator">+</span> userId<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token comment">// 尝试获取锁</span>
+<span class="token comment">// boolean isLock = lock.tryLock(); // 无参：立即返回</span>
+<span class="token keyword">boolean</span> isLock <span class="token operator">=</span> lock<span class="token punctuation">.</span><span class="token function">tryLock</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">10</span><span class="token punctuation">,</span> <span class="token class-name">TimeUnit</span><span class="token punctuation">.</span><span class="token constant">SECONDS</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 有参：等待1s，锁自动释放10s（WatchDog失效）</span>
+<span class="token keyword">if</span> <span class="token punctuation">(</span>isLock<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">try</span> <span class="token punctuation">{</span>
+        <span class="token comment">// 执行业务逻辑</span>
+    <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+        lock<span class="token punctuation">.</span><span class="token function">unlock</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 释放锁</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<hr>
+<p><img src="https://i-blog.csdnimg.cn/direct/42a4d2e243654b02b073c6b1c6c27073.png" alt="在这里插入图片描述"></p>
+<h2><a id="__47"></a>三、 核心原理：可重入锁</h2>
+<h3><a id="1__48"></a>1. 实现原理</h3>
+<p>Redisson 放弃了 <code>setnx</code> 的简单 String 结构，改用 <strong>Redis Hash 结构</strong>。</p>
+<ul>
+<li><strong>Key</strong>：锁名称（如 <code>lock:order:1</code>）</li>
+<li><strong>Field</strong>：线程标识（<code>UUID + ThreadID</code>）</li>
+<li><strong>Value</strong>：重入次数（计数器）</li>
+</ul>
+<h3><a id="2_Lua___53"></a>2. Lua 脚本逻辑 (加锁)</h3>
+<p>Redisson 使用 Lua 脚本保证原子性：</p>
+<ol>
+<li><strong>锁不存在</strong>：创建 Hash，<code>hset</code> 字段值为 1，设置过期时间。返回 <code>null</code>（成功）。</li>
+<li><strong>锁存在且是自己</strong>：<code>hincrby</code> 将计数器 +1，重置过期时间。返回 <code>null</code>（成功）。</li>
+<li><strong>锁存在但不是自己</strong>：返回锁的剩余生存时间（失败）。</li>
+</ol>
+<h3><a id="3__58"></a>3. 解锁逻辑</h3>
+<ul>
+<li>将计数器 <code>-1</code>。</li>
+<li>若计数器 <code>&gt; 0</code>：说明还有重入，保留锁，重置过期时间。</li>
+<li>若计数器 <code>&lt;= 0</code>：删除 Key，发布解锁消息。</li>
+</ul>
+<h2><a id="httpsiblogcsdnimgcndirect8dfcf8d9f766443ca8af4cd53a9e8a64png_63"></a><img src="https://i-blog.csdnimg.cn/direct/8dfcf8d9f766443ca8af4cd53a9e8a64.png" alt="在这里插入图片描述"></h2>
+<h2><a id="_66"></a>分布式锁原理</h2>
+<h3><a id="_Redisson__67"></a>🧩 Redisson 分布式锁核心流程拆解</h3>
+<p>我帮你把这张流程图和对应的源码逻辑一步步拆开讲，你就能看懂每个判断和分支的意义了。</p>
+<hr>
+<p><img src="https://i-blog.csdnimg.cn/direct/b26a4f7553204773bfff8521f14f20cc.png" alt="在这里插入图片描述"></p>
+<h4><a id="1__73"></a>1. 开始：尝试获取锁</h4>
+<p>入口是 <code>RLock.lock()</code> 或 <code>RLock.tryLock()</code> 方法，本质是向 Redis 发送 <code>SET</code> 命令尝试创建锁键（比如 <code>redisson_lock:key</code>）。</p>
+<h4><a id="2__ttl__null_76"></a>2. 判断 ttl 是否为 null</h4>
+<ul>
+<li><strong>ttl = null</strong>：代表<strong>获取锁成功</strong>（锁键不存在，成功写入）</li>
+<li><strong>ttl ≠ null</strong>：代表<strong>获取锁失败</strong>（锁已被其他线程持有，返回当前锁的剩余过期时间）</li>
+</ul>
+<blockquote>
+<p>对应源码：<code>tryLockInnerAsync()</code> 方法，执行 <code>SET</code> 命令后，返回 <code>null</code> 表示成功，返回 <code>ttl</code> 表示失败。</p>
+</blockquote>
+<hr>
+<h4><a id="3_1ttl__null_84"></a>3. 分支1：获取锁成功（ttl = null）</h4>
+<ul>
+<li>判断 <code>leaseTime</code> 是否为 <code>-1</code>
+<ul>
+<li>
+<p><strong>是（leaseTime = -1）</strong>：开启 <strong>watchDog（看门狗）</strong> 自动续期机制<br>
+Redisson 会启动一个后台定时任务，每隔 <code>lockWatchdogTimeout / 3</code> 时间（默认 10s/3≈3.3s），给锁键重置过期时间（默认 30s），防止业务执行时间过长导致锁提前过期。leaseTime=-1 = 永久自动续期，直到解锁或服务挂掉。<br>
+不管业务是运行、阻塞、休眠，都续期。(<strong>超时续约)</strong></p>
+</li>
+<li>
+<p><strong>否（leaseTime &gt; 0）</strong>：不开启看门狗，锁会在 <code>leaseTime</code> 后自动过期</p>
+</li>
+</ul>
+</li>
+<li>最终返回 <code>true</code>，表示加锁成功</li>
+</ul>
+<blockquote>
+<p>对应源码：<code>lock()</code> 方法默认 <code>leaseTime = -1</code>，会自动续期；<code>tryLock(waitTime, leaseTime, unit)</code> 手动指定 <code>leaseTime</code> 则不会续期。</p>
+</blockquote>
+<hr>
+<h4><a id="4_2ttl__null_97"></a>4. 分支2：获取锁失败（ttl ≠ null）</h4>
+<p>进入<em><strong>等待重试</strong></em>逻辑：</p>
+<ol>
+<li><strong>判断剩余等待时间是否 &gt; 0</strong>
+<ul>
+<li><strong>否</strong>：直接返回 <code>false</code>，表示加锁失败</li>
+<li><strong>是</strong>：订阅 Redis 的 <code>pub/sub</code> 通道，等待锁释放的信号</li>
+</ul>
+</li>
+<li>订阅后，阻塞等待锁释放通知
+<ul>
+<li>等待过程中会不断检查<strong>等待时间是否超时</strong>
+<ul>
+<li><strong>超时</strong>：取消订阅，返回 <code>false</code></li>
+<li><strong>未超时</strong>：收到锁释放信号后，回到「尝试获取锁」步骤，重新竞争锁</li>
+</ul>
+</li>
+</ul>
+</li>
+</ol>
+<blockquote>
+<p>对应源码：<code>subscribe()</code> 方法订阅锁释放频道，<code>await()</code> 阻塞等待信号，超时后通过 <code>cancel()</code> 取消订阅并返回失败。</p>
+</blockquote>
+<hr>
+<h3><a id="__111"></a>💡 关键源码概念对应</h3>
+
+<table>
+<thead>
+<tr>
+<th>流程图节点</th>
+<th>源码对应</th>
+<th>核心作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ttl 是否为 null</code></td>
+<td><code>tryLockInnerAsync()</code> 返回值</td>
+<td>标识锁是否获取成功</td>
+</tr>
+<tr>
+<td><code>leaseTime 是否为 -1</code></td>
+<td><code>lock()</code> 方法参数</td>
+<td>控制是否开启自动续期</td>
+</tr>
+<tr>
+<td><code>开启 watchDog</code></td>
+<td><code>RenewExpirationTask</code> 定时任务</td>
+<td>后台续期，防止锁提前过期</td>
+</tr>
+<tr>
+<td><code>订阅并等待释放锁的信号</code></td>
+<td><code>LockPubSub</code> 发布订阅</td>
+<td>避免自旋浪费 CPU，高效等待锁</td>
+</tr>
+<tr>
+<td><code>判断等待时间是否超时</code></td>
+<td><code>await(timeout, unit)</code></td>
+<td>控制最大等待时间，防止无限阻塞</td>
+</tr>
+</tbody>
+</table><hr>
+<h3><a id="__122"></a>✅ 完整流程总结</h3>
+<ol>
+<li>尝试加锁 → 成功则根据 <code>leaseTime</code> 决定是否续期 → 返回 <code>true</code></li>
+<li>加锁失败 → 若还有等待时间 → 订阅锁释放信号 → 等待唤醒后重试</li>
+<li>等待超时或无剩余等待时间 → 返回 <code>false</code>，加锁失败</li>
+</ol>
+<hr>
+<h3><a id="__129"></a>❓ 你可能看不懂的点补充</h3>
+<ul>
+<li><strong>watchDog 为什么只在 <code>leaseTime=-1</code> 时开启？</strong><br>
+手动指定 <code>leaseTime</code> 代表你能预估业务执行时间，Redisson 认为不需要自动续期，避免锁长期占用。</li>
+<li><strong>订阅信号比自旋好在哪？</strong><br>
+自旋会不断发送 <code>GET</code>/<code>SET</code> 命令，浪费 CPU 和 Redis 资源；订阅模式只有锁释放时才唤醒，更高效。</li>
+<li><strong>ttl 是什么？</strong><br>
+<code>time to live</code>，Redis 键的剩余过期时间，Redisson 用它判断锁是否还在被持有。<br>
+<img src="https://i-blog.csdnimg.cn/direct/7e9513122ef348e9802a55fee047b363.png" alt="在这里插入图片描述"></li>
+</ul>
+<h3><a id="_Redisson__138"></a>🔓 Redisson 释放锁流程完整解析</h3>
+<p>把右边<strong>释放锁</strong>的流程和左边<strong>加锁</strong>的联动逻辑讲透，你就能看懂整个闭环了。</p>
+<hr>
+<h4><a id="1__143"></a>1. 入口：尝试释放锁</h4>
+<p>调用 <code>RLock.unlock()</code> 方法，本质是执行 Redis Lua 脚本：</p>
+<ul>
+<li>校验当前线程是否持有该锁（防止误删别人的锁）</li>
+<li>删除锁键</li>
+<li>触发后续清理逻辑</li>
+</ul>
+<hr>
+<h4><a id="2__151"></a>2. 判断是否成功</h4>
+<ul>
+<li><strong>是</strong>：释放锁成功（Lua 脚本执行完成，锁已删除）</li>
+<li><strong>否</strong>：释放锁失败（比如锁已过期、不是自己持有的锁），记录异常后结束</li>
+</ul>
+<blockquote>
+<p>对应源码：<code>unlockInnerAsync()</code> 方法，通过 Lua 脚本原子性完成「校验+删除」。</p>
+</blockquote>
+<hr>
+<h4><a id="3__159"></a>3. 释放成功后的核心动作</h4>
+<p>释放锁成功后，会触发两个关键操作：</p>
+<h5><a id="__watchDog_162"></a>① 取消 watchDog（看门狗）</h5>
+<ul>
+<li>停止后台自动续期的定时任务</li>
+<li>避免锁已经释放了，还在白白刷新过期时间</li>
+<li>这一步和左边加锁流程里的「开启 watchDog」是<strong>生命周期配对</strong>的</li>
+</ul>
+<h5><a id="_PubSub_167"></a>② 发送释放锁的消息（Pub/Sub）</h5>
+<ul>
+<li>向 Redis 的 <code>lock</code> 频道发布「锁已释放」的通知</li>
+<li>唤醒所有正在订阅这个锁的等待线程（左边流程里「订阅并等待释放锁的信号」的线程）</li>
+<li>等待线程收到通知后，会重新进入「尝试获取锁」的竞争环节</li>
+</ul>
+<hr>
+<h4><a id="4__174"></a>4. 与加锁流程的联动</h4>
+<p>这张图里的<strong>绿色虚线</strong>就是关键联动：</p>
+<ul>
+<li>释放锁成功 → 取消当前持锁线程的 watchDog</li>
+<li>释放锁成功 → 发送通知，唤醒正在等待的线程，让它们重新尝试获取锁</li>
+<li>等待线程被唤醒后，回到「尝试获取锁」的起点，继续竞争</li>
+</ul>
+<hr>
+<h3><a id="__182"></a>💡 关键源码概念对应</h3>
+
+<table>
+<thead>
+<tr>
+<th>流程图节点</th>
+<th>源码对应</th>
+<th>核心作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>尝试释放锁</code></td>
+<td><code>unlock()</code> / <code>unlockInnerAsync()</code></td>
+<td>执行 Lua 脚本释放锁</td>
+</tr>
+<tr>
+<td><code>判断是否成功</code></td>
+<td>Lua 脚本返回值</td>
+<td>校验锁归属与删除结果</td>
+</tr>
+<tr>
+<td><code>取消 watchDog</code></td>
+<td><code>cancelExpirationRenewal()</code></td>
+<td>停止自动续期任务</td>
+</tr>
+<tr>
+<td><code>发送释放锁消息</code></td>
+<td><code>publishUnlock()</code></td>
+<td>发布 Pub/Sub 通知唤醒等待者</td>
+</tr>
+<tr>
+<td><code>记录异常</code></td>
+<td>日志/抛出 <code>IllegalMonitorStateException</code></td>
+<td>处理非法释放锁的场景</td>
+</tr>
+</tbody>
+</table><hr>
+<h3><a id="__193"></a>✅ 完整释放锁流程总结</h3>
+<ol>
+<li>调用 <code>unlock()</code> → 执行 Lua 脚本校验并删除锁</li>
+<li>释放成功：
+<ul>
+<li>停止看门狗续期任务</li>
+<li>发布锁释放通知，唤醒等待线程</li>
+<li>结束</li>
+</ul>
+</li>
+<li>释放失败：
+<ul>
+<li>记录异常（比如「锁不属于当前线程」）</li>
+<li>结束</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h3><a id="__205"></a>❓ 你可能关心的细节补充</h3>
+<ul>
+<li><strong>为什么用 Lua 脚本？</strong><br>
+保证「判断锁归属 + 删除锁」是原子操作，避免并发问题。</li>
+<li><strong>为什么要发 Pub/Sub 消息？</strong><br>
+替代自旋等待，让等待线程在锁释放时才被唤醒，更高效。</li>
+<li><strong>如果服务宕机了，锁会怎样？</strong><br>
+看门狗随服务一起停止，锁会在 <code>lockWatchdogTimeout</code>（默认30秒）后自动过期，避免死锁。</li>
+</ul>
+<hr>
+<h2><a id="__WatchDog_216"></a>四、 进阶原理：锁重试与 WatchDog</h2>
+<h3><a id="1_WatchDog__217"></a>1. WatchDog (看门狗机制)</h3>
+<p><strong>目的</strong>：解决业务执行时间过长导致锁超时释放的问题。</p>
+<ul>
+<li><strong>触发条件</strong>：调用 <code>lock()</code> 或 <code>tryLock()</code> <strong>不带 LeaseTime 参数</strong>时。</li>
+<li><strong>默认配置</strong>：锁过期时间 <code>30s</code>，检查间隔 <code>10s</code>。</li>
+<li><strong>工作流程</strong>：
+<ol>
+<li>加锁成功后，启动一个后台定时任务。</li>
+<li>每隔 <code>10s</code>（过期时间/3）检查锁是否还被当前线程持有。</li>
+<li>若持有，重置过期时间为 <code>30s</code>（续约）。</li>
+<li>若线程宕机，看门狗停止，锁等待 <code>30s</code> 后自动释放。</li>
+</ol>
+</li>
+</ul>
+<h3><a id="2__226"></a>2. 锁重试机制</h3>
+<ul>
+<li><code>tryLock(waitTime, leaseTime, unit)</code>：
+<ul>
+<li>如果设置了 <code>leaseTime</code>，看门狗机制<strong>失效</strong>，锁会在指定时间后释放。</li>
+<li>获取失败时，会利用 Redis 的 <strong>Pub/Sub（发布订阅）</strong> 机制等待锁释放通知，而不是纯粹的死循环自旋（性能更优）。</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h2><a id="_MultiLock__231"></a>五、 高可用原理：MultiLock (联锁)</h2>
+<h3><a id="1__232"></a>1. 问题背景</h3>
+<p>在 Redis 主从架构中：</p>
+<ol>
+<li>客户端向 Master 写入锁。</li>
+<li>Master 宕机，数据未同步到 Slave。</li>
+<li>Slave 升级为新 Master，锁数据丢失。</li>
+<li>其他客户端成功获取锁，导致<strong>并发安全问题</strong>。</li>
+</ol>
+<h3><a id="2_MultiLock__238"></a>2. MultiLock 解决方案</h3>
+<p><strong>原理</strong>：放弃主从一致性，将多个 Redis 节点视为独立的 Master。</p>
+<ul>
+<li>加锁时：必须向所有节点都发送加锁请求，全部成功才算加锁成功。</li>
+<li>容错性：只要有任意一个节点存活，锁就不会丢失（类似 CP 模型）。<br>
+<strong>代价</strong>：性能下降（需要连接多个节点并发写入）。</li>
+</ul>
+<hr>
+<h2><a id="__244"></a>六、 复习口诀</h2>
+<ol>
+<li><strong>重入</strong>：Hash 结构存 ID，计数加减保原子。</li>
+<li><strong>续约</strong>：看门狗，定时跑，十秒一刷三十秒。</li>
+<li><strong>重试</strong>：消息订阅等通知，避免空转耗资源。</li>
+<li><strong>高可用</strong>：主从同步怕宕机，联锁多写保安全。</li>
+</ol>
+</div>
+</body>
+
+</html>
