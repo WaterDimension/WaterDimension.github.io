@@ -1,0 +1,364 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JVM 类加载机制详解（生命周期・双亲委派・自定义加载器）</title>
+  <link rel="stylesheet" href="https://stackedit.io/style.css" />
+</head>
+
+<body class="stackedit">
+  <div class="stackedit__html"><h1><a id="_0"></a>类加载器</h1>
+<p>类加载器（ClassLoader）说白了只是个“搬运工”，负责把磁盘上的 <code>.class</code> 字节码文件拉进内存；而<strong>加载、验证、准备、解析、初始化</strong>，则是 JVM 拿到文件后，在内部进行的“组装、安检和激活”过程。</p>
+<h2><a id="_4"></a>类加载的生命周期</h2>
+<h5><a id="_6"></a><strong>加载，验证、准备、解析（连接），初始化</strong></h5>
+<h2><a id="_1_Verification__8"></a>🛡️ 1. 验证（Verification）—— 安全检查</h2>
+<ul>
+<li><strong>一句话总结：</strong> 检查拉进来的 <code>.class</code> 文件是不是合法的，有没有坏人恶意篡改。</li>
+<li><strong>为什么要这一步？</strong> 字节码文件不一定非要用 Java 编译器（javac）生成，任何人都可以用二进制编辑器手动写一个 <code>.class</code> 文件。如果没有验证，里面写了破坏 JVM 内存、攻击系统的恶意代码，JVM 直接运行就瘫痪了。</li>
+<li><strong>具体查什么？</strong>
+<ul>
+<li><strong>文件格式验证：</strong> 检查开头是不是魔数 <code>0xCAFEBABE</code>（咖啡宝贝），版本号是否在当前 JVM 接受范围内。</li>
+<li><strong>元数据验证：</strong> 检查语法，这个类有没有父类？是不是继承了被 <code>final</code> 修饰的类？</li>
+<li><strong>字节码验证：</strong> 保证程序语义是合法的，比如不会出现“把一个对象强转成毫无关系的另一个类”这种离谱操作。</li>
+<li><strong>符号引用验证：</strong> 后面解析阶段会用，确保能根据名字找到对应的类、方法和字段。</li>
+</ul>
+</li>
+</ul>
+<h2><a id="2_Preparation__18"></a>储备阶段：2. 准备（Preparation）—— 分配内存，赋零值</h2>
+<ul>
+<li>
+<p><strong>一句话总结：</strong> 为类的<strong>静态变量（static 变量）<strong>在方法区分配内存，并设置</strong>默认初始值。</strong></p>
+</li>
+<li>
+<p><strong>核心细节（面试常考点）：</strong></p>
+<p>此时赋的值是“零值”（如 <code>0</code>、<code>0.0</code>、<code>null</code>、<code>false</code>），而不是你在代码里写的那个值！</p>
+</li>
+<li>
+<p><strong>举个栗子：</strong></p>
+<p>假设你的类里写了这一行：</p>
+<pre><code class="prism language-Java">public static int value = 123;
+</code></pre>
+<p>在<strong>准备阶段</strong>过完后，<code>value</code> 在内存里的值是 <strong><code>0</code></strong>，而不是 <code>123</code>！真正的 <code>123</code> 要等到<strong>初始化</strong>阶段才会赋值。</p>
+</li>
+<li>
+<p><strong>特殊情况（常量）：</strong></p>
+<p>如果是被 <code>final</code> 修饰的常量：</p>
+<pre><code class="prism language-Java">public static final int value = 123;
+</code></pre>
+<p>因为有了 <code>final</code>，它是不可变的。在编译时 javac 就为它生成了 <code>ConstantValue</code> 属性，所以在<strong>准备阶段</strong>，<code>value</code> 就会直接被赋值为 <strong><code>123</code></strong>。</p>
+</li>
+</ul>
+<h2><a id="_3_Resolution__50"></a>🔗 3. 解析（Resolution）—— 符号引用转直接引用</h2>
+<ul>
+<li>
+<p><strong>一句话总结：</strong> 把常量池内的“名字（字符串标签）”<strong>换成真正的</strong>“内存地址指针”。</p>
+</li>
+<li>
+<p><strong>什么叫符号引用（Symbolic References）？</strong></p>
+<p>你在写代码或者写字节码时，调用一个方法 <code>com.user.OrderService.string()</code>。此时 JVM 内部并不知道这个方法具体在内存的哪个地方，它只能用一串<strong>字符串</strong>（符号）来暂时代替：“喏，我以后要调用这个名字的方法”。</p>
+</li>
+<li>
+<p><strong>什么叫直接引用（Direct References）？</strong></p>
+<p>解析阶段开始后，JVM 在内存里一查，找到了 <code>OrderService.string()</code> 对应的真实内存起始地址（比如 <code>0x7fff1234</code>）。然后把之前的字符串名字，<strong>替换成这个真实的内存指针</strong>。</p>
+</li>
+<li>
+<p><strong>解析的对象：</strong> 类或接口、字段、类方法、接口方法等。</p>
+</li>
+</ul>
+<h2><a id="_4_Initialization__Java__64"></a>🚀 4. 初始化（Initialization）—— 真正执行 Java 代码</h2>
+<ul>
+<li>
+<p><strong>一句话总结：</strong> 这是类加载的最后一步，JVM 开始真正执行你在类里写的 Java 赋值语句和静态代码块。</p>
+</li>
+<li>
+<p><strong>核心底层：</strong></p>
+<p>初始化阶段，本质上就是 JVM 自动收集类里所有<strong>静态变量的赋值动作</strong>和<strong>静态代码块（<code>static {}</code>）</strong>，融合成一个叫做 <strong><code>&lt;clinit&gt;()</code></strong>（Class Initialize）的方法，然后去执行它。</p>
+</li>
+<li>
+<p><strong>再看刚才的栗子：</strong></p>
+<pre><code class="prism language-Java">public static int value = 123;
+</code></pre>
+<p>到了<strong>初始化</strong>阶段，JVM 执行 <code>&lt;clinit&gt;()</code> 方法，<code>value</code> 的值才真正从 <code>0</code> 变成了 <strong><code>123</code></strong>。</p>
+</li>
+<li>
+<p><strong>触发初始化的时机（主动引用）：</strong></p>
+<p>类不是平白无故初始化的，只有遇到以下情况（部分常见情况）才会触发：</p>
+<ol>
+<li>使用 <code>new</code> 关键字实例化对象。</li>
+<li>读取或设置一个类的静态字段（被 final 修饰的常量除外）。</li>
+<li>调用一个类的静态方法。</li>
+<li>使用 <code>Class.forName("...")</code> 反射加载类。</li>
+<li>虚拟机启动时，包含 <code>main()</code> 方法那个主类会被率先初始化。</li>
+</ol>
+</li>
+</ul>
+<h2><a id="__90"></a>💡 总结通关图谱</h2>
+<p>为了让你在学接下来的“三种类加载器”时完全不晕，记住这个连贯的故事：</p>
+<ol>
+<li><strong>加载：</strong> 搬运工（ClassLoader）把 <code>.class</code> 二进制流读进内存。</li>
+<li><strong>验证：</strong> 安检员上场，看看文件有没有被下毒（防篡改）。</li>
+<li><strong>准备：</strong> 木匠在内存方法区盖好静态变量的“毛坯房”，里面先刷上白墙（赋零值 <code>0</code>）。</li>
+<li><strong>解析：</strong> 导航仪把代码里的“路标字符串”换成精细的“GPS 经纬度（内存直接引用）”。</li>
+<li><strong>初始化：</strong> 装修队进场，把精装家具搬进去，按照你的代码意图给静态变量正式赋值（执行 <code>&lt;clinit&gt;()</code>）。</li>
+</ol>
+<p>这五步走完，这个类在 JVM 里就彻底“活了”，接下来你就可以愉快地 <code>new</code> 它的对象实例了。把这套流程焊死在脑子里，再去学<strong>双亲委派</strong>和<strong>三大类加载器</strong>，逻辑就会顺畅得不可思议！</p>
+<h1><a id="_102"></a>三大类加载器</h1>
+
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>加载哪的类</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Bootstrap ClassLoader（启动类加载器）</strong></td>
+<td><code>JAVA_HOME/jre/lib</code> 目录下的核心类库（如 <code>rt.jar</code>、<code>charsets.jar</code> 等 JDK 核心类）</td>
+<td>JVM 底层 C++ 实现，无 Java 类实例，Java 代码中<strong>无法直接访问</strong>，<code>getClassLoader()</code> 会返回 <code>null</code></td>
+</tr>
+<tr>
+<td><strong>Extension ClassLoader（扩展类加载器）</strong></td>
+<td><code>JAVA_HOME/jre/lib/ext</code> 目录下的扩展 jar 包</td>
+<td>父加载器为 Bootstrap ClassLoader，Java 代码中获取其上级加载器时会显示为 <code>null</code></td>
+</tr>
+<tr>
+<td><strong>Application ClassLoader（应用 / 系统类加载器）</strong></td>
+<td>项目 <code>classpath</code> 路径下的自定义类、第三方依赖 jar 包</td>
+<td>父加载器为 Extension ClassLoader，是 Java 代码中默认的类加载器</td>
+</tr>
+<tr>
+<td><strong>自定义类加载器</strong></td>
+<td>自定义路径（如网络、加密文件、特殊目录等）下的类</td>
+<td>父加载器默认指定为 Application ClassLoader，可实现自定义类加载逻辑</td>
+</tr>
+</tbody>
+</table><h2><a id="1__Bootstrap_ClassLoader___111"></a>1. 启动类加载器 (Bootstrap ClassLoader) —— “始祖级大佬”</h2>
+<ul>
+<li><strong>它在哪、加载啥：</strong> 负责加载 Java 核心类库，也就是你配置的 <code>JAVA_HOME/jre/lib</code> 目录下的核心 jar 包（比如最关键的 <code>rt.jar</code>，里面躺着 <code>java.lang.Object</code>、<code>java.lang.String</code>、<code>java.util.HashMap</code> 等）。</li>
+<li><strong>底层硬核秘密（面试爱考）：</strong>
+<ul>
+<li><strong>它不是用 Java 语言写的！</strong> 它是用 <strong>C/C++</strong> 写的，嵌套在 JVM 内核里面。</li>
+<li><strong>它没有实例：</strong> 因为它不是一个 Java 对象，所以你在 Java 代码里如果尝试去获取它，<strong>返回的结果永远是 <code>null</code></strong>。</li>
+<li><em>举个栗子：</em> 如果你执行 <code>String.class.getClassLoader()</code>，你会发现打印出来的是 <code>null</code>。表里说明写的“显示为 null”就是这个意思。</li>
+</ul>
+</li>
+</ul>
+<h2><a id="2__Extension_ClassLoader___119"></a>2. 扩展类加载器 (Extension ClassLoader) —— “皇家护卫”</h2>
+<ul>
+<li><strong>它在哪、加载啥：</strong> 负责加载 Java 的扩展类库，对应的目录是 <code>JAVA_HOME/jre/lib/ext</code>。这里面放的是一些官方自带但不是最核心的扩展工具 jar 包。</li>
+<li><strong>底层秘密：</strong> 它是由 Java 语言编写的（具体类名是 <code>sun.misc.Launcher$ExtClassLoader</code>）。表里写着“上级为 Bootstrap”，意思是它的<strong>逻辑父加载器</strong>是 Bootstrap。</li>
+</ul>
+<h2><a id="3__Application_ClassLoader___124"></a>3. 应用程序类加载器 (Application ClassLoader) —— “搬砖主力军”</h2>
+<ul>
+<li><strong>它在哪、加载啥：</strong> 负责加载 <strong><code>classpath</code>（类路径）</strong> 下的所有类。说白了，<strong>你在项目里自己写的代码、引入的第三方 Maven 依赖（如 Spring、MyBatis、或者是各类 jar 包），全部都是由它来负责加载进内存的</strong>。</li>
+<li><strong>底层秘密：</strong> 它也是 Java 写的（<code>sun.misc.Launcher$AppClassLoader</code>）。因为平时我们绝大多数类都是它加载的，所以它也叫系统类加载器（System ClassLoader）。如果你写一个自己的类 <code>User.class.getClassLoader()</code>，打印出来的就是它。</li>
+</ul>
+<h2><a id="4__Custom_ClassLoader___129"></a>4. 自定义类加载器 (Custom ClassLoader) —— “特种兵”</h2>
+<ul>
+<li><strong>为什么需要它：</strong> 官方的前三个加载器只能去<strong>本地固定的磁盘目录或环境变量</strong>里加载明文的 <code>.class</code> 文件。如果我的业务场景很特殊呢？
+<ul>
+<li>比如：我的字节码文件是加密过的，防止别人反编译，需要加载时在内存里先<strong>解密</strong>。</li>
+<li>比如：我的 <code>.class</code> 文件不在本地，而是存在远端服务器或数据库里，需要通过 <strong>网络网络请求</strong> 读进来。想加载<strong>非classpath随意路径中的类文件。</strong></li>
+</ul>
+</li>
+<li><strong>怎么做：</strong> 继承 <code>java.lang.ClassLoader</code> 类，重写 <code>findClass()</code> 方法，你就能自己手写一个属于你的类加载器。</li>
+</ul>
+<h2><a id="__136"></a>⚠️ 盯紧图里最右侧的“说明”：这是在给双亲委派埋伏笔！</h2>
+<p>注意看图里写的：</p>
+<ul>
+<li>Extension 的上级是 Bootstrap</li>
+<li>Application 的上级是 Extension</li>
+<li>自定义类加载器的上级是 Application</li>
+</ul>
+<blockquote>
+<p>🚨 <strong>纠错警示灯：这里的“上级”绝对不是面向对象里的“继承（extends）”关系！</strong></p>
+</blockquote>
+<p>在 JVM 源码里，它们之间既没有 <code>AppClassLoader extends ExtClassLoader</code>，也没有 <code>ExtClassLoader extends Bootstrap</code>。 它们是通过组合（Combination）关系来维持组合的。</p>
+<h5><a id="_ClassLoader__parentAppClassLoader__parent__ExtClassLoader__148"></a><strong>也就是说，每个 ClassLoader 实例里面都有一个成员变量叫 <code>parent</code>，<code>AppClassLoader</code> 的 <code>parent</code> 属性指向了 <code>ExtClassLoader</code> 实例。</strong></h5>
+<p>这种“逐级引向上级”的链条，就是接下来你要学的 <strong>双亲委派模型（Parent Delegation Model）</strong> 的核心骨架！</p>
+<h1><a id="_152"></a>双亲委派模式</h1>
+<h4><a id="loadClass__154"></a>就是调用类加载器的loadClass方法时， 查找类的规则。</h4>
+<pre><code class="prism language-java">protect <span class="token class-name">Class</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token operator">?</span><span class="token punctuation">&gt;</span></span> <span class="token function">loadClass</span><span class="token punctuation">(</span><span class="token class-name">Stirng</span> name<span class="token punctuation">,</span> <span class="token keyword">boolean</span> resolve<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">ClassNotFoundException</span> <span class="token punctuation">{</span>
+    <span class="token keyword">synchronized</span> <span class="token punctuation">(</span><span class="token function">getClassLoadingLock</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+		<span class="token comment">// 1.检查该类是否已经加载</span>
+        <span class="token class-name">Class</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token operator">?</span><span class="token punctuation">&gt;</span></span> c <span class="token operator">=</span> <span class="token function">findLoadedClass</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>c <span class="token operator">==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+			<span class="token keyword">long</span> t0 <span class="token operator">=</span> <span class="token class-name">System</span><span class="token punctuation">.</span><span class="token function">nanoTime</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>parent <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token comment">// 2.有上级的话， 委派上级 loadClass</span>
+                    c <span class="token operator">=</span> parent<span class="token punctuation">.</span><span class="token function">loadClass</span><span class="token punctuation">(</span>name<span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+                    <span class="token comment">// 3.没有上级了（ExtClassLoader), 则委派 BootstrapClassLoader</span>
+                    c <span class="token operator">=</span> <span class="token function">findBootstrapClassOrNull</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span><span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{</span><span class="token punctuation">}</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>c <span class="token operator">==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">long</span> t1 <span class="token operator">=</span> <span class="token class-name">System</span><span class="token punctuation">.</span><span class="token function">nanoTime</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token comment">// 4.每一层找不到，调用findClass 方法（每个类加载器自己扩展）来加载</span>
+                c  <span class="token operator">=</span> <span class="token function">findClass</span><span class="token punctuation">(</span>anme<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h1><a id="_185"></a>线程上下文类加载器</h1>
+<h5><a id="Thread_Context_ClassLoader_188"></a><strong>线程上下文类加载器（Thread Context ClassLoader）</strong>，以及它如何用来<strong>打破双亲委派模型</strong>。</h5>
+<p>一个很好的引子：在老版本的 JDBC 中，我们需要手动写 <code>Class.forName("com.mysql.jdbc.Driver")</code> 来加载驱动；但在 JDBC 4.0 之后，即使<strong>不写这行代码</strong>，MySQL 驱动也能被正确加载。</p>
+<h5><a id="_SPIService_Provider_Interface_192"></a>这背后其实隐藏着一个著名的设计矛盾，也就是 <strong>SPI（Service Provider Interface）机制</strong>。</h5>
+<h2><a id="1__194"></a>1. 痛点：双亲委派模型的“死穴”</h2>
+<p>在正常情况下，双亲委派模型要求：<strong>如果一个类由某个类加载器加载，那么它里面引用的其他类，默认也会用同一个类加载器去加载。</strong></p>
+<ul>
+<li><strong><code>DriverManager</code> 的身份</strong>：它是 JDK 核心类库的一部分（位于 <code>java.sql</code> 包下），因此它是由最顶层的 <strong><code>Bootstrap ClassLoader</code>（启动类加载器）</strong> 加载的。</li>
+<li><strong>MySQL 驱动的身份</strong>：它是第三方厂商提供的 Jar 包（位于 <code>classpath</code> 下），原本应该由底层的 <strong><code>App ClassLoader</code>（系统类加载器）</strong> 来加载。</li>
+</ul>
+<p>当 <code>DriverManager</code> 初始化并尝试去加载各个厂商实现的驱动时，矛盾就来了：</p>
+<blockquote>
+<p><strong><code>DriverManager</code>（由 Bootstrap 加载）想要调用底层的 <code>com.mysql.jdbc.Driver</code>（在 classpath 中，Bootstrap 根本找不到、也管不着）。</strong></p>
+</blockquote>
+<p>这就是双亲委派模型的局限性：<strong>核心类库（顶层加载器）无法直接访问用户代码（底层加载器）。</strong></p>
+<h2><a id="2_Thread_Context_ClassLoader_207"></a>2. 破局者：线程上下文类加载器（Thread Context ClassLoader）</h2>
+<p>为了解决这个“套娃”死结，Java 引入了<strong>线程上下文类加载器</strong>。它相当于给顶层加载器开了一个“后门”，允许顶层代码“逆向”调用底层的加载器。</p>
+<p>虽然图片在 <code>loadInitialDrivers()</code> 这里戛然而止，如果我们追进这个方法的源码，就会发现它的核心实现逻辑如下：</p>
+<pre><code class="prism language-Java">private static void loadInitialDrivers() {
+    // 1. 使用 ServiceLoader 机制加载驱动
+    ServiceLoader&lt;Driver&gt; loadedDrivers = ServiceLoader.load(Driver.class);
+    Iterator&lt;Driver&gt; driversIterator = loadedDrivers.iterator();
+    try{
+        while(driversIterator.hasNext()) {
+            driversIterator.next(); // 这里会触发驱动类的加载和注册
+        }
+    } catch(Throwable t) {
+        // Do nothing
+    }
+}
+</code></pre>
+<p>当我们再进一步点进 <code>ServiceLoader.load(Driver.class)</code> 的源码时，狐狸尾巴就露出来了：</p>
+<pre><code class="prism language-Java">public static &lt;S&gt; ServiceLoader&lt;S&gt; load(Class&lt;S&gt; service) {
+    // 核心：获取了当前线程的上下文类加载器！（是当前线程使用的类加载器，默认就是Application classloader）
+    ClassLoader cl = Thread.currentThread().getContextClassLoader();
+    return ServiceLoader.load(service, cl);
+}
+</code></pre>
+<h2><a id="3__242"></a>3. 核心总结</h2>
+<ol>
+<li><strong>默认委派失败</strong>：<code>DriverManager</code> 是被 <code>BootstrapClassLoader</code> 加载的，它在自己的管辖范围内（JDK 核心库）找不到引入的 MySQL 驱动包。</li>
+<li><strong>借刀杀人（打破委派）</strong>：每个 Java 线程在创建时，默认都会把 <code>AppClassLoader</code> 设置为自己的 <code>ContextClassLoader</code>（上下文类加载器）。</li>
+<li><strong>成功加载</strong>：<code>DriverManager</code> 巧妙地通过 <code>Thread.currentThread().getContextClassLoader()</code> 拿到了这个 <code>AppClassLoader</code>，并强行用它去加载了 <code>classpath</code> 下的 MySQL 驱动。</li>
+</ol>
+<p>这种由<strong>高层加载器委托底层加载器</strong>去加载类的行为，本质上<strong>打破了双亲委派模型</strong>那种只能“自底向上委派”的固有规则。</p>
+<h1><a id="_252"></a>自定义类加载器</h1>
+<h2><a id="__254"></a>一、 为什么要自定义类加载器？</h2>
+<p>图片中列举了三个核心场景，它们在实际开发（尤其是中间件和服务器开发）中非常经典：</p>
+<ol>
+<li><strong>加载非 <code>classpath</code> 随意路径中的类文件</strong>
+<ul>
+<li><strong>大白话</strong>：默认的 <code>AppClassLoader</code> 只能加载项目环境变量 <code>classpath</code> 路径下的类。如果你想从网络上（比如 RPC 远程传输的字节码）、数据库里、或者服务器的某个特定目录（如图片中的 <code>E:\myclasspath</code>）动态加载 <code>.class</code> 文件，默认的加载器就无能为力了。</li>
+</ul>
+</li>
+<li><strong>通过接口解耦（常用于框架设计、插件化）</strong>
+<ul>
+<li><strong>大白话</strong>：比如做插件化开发（OSGi 架构）。主程序只定义接口，<strong>具体的实现类由不同的自定义类加载器动态从插件包里加载</strong>，实现热插拔和完美解耦。</li>
+</ul>
+</li>
+<li><strong>类隔离（不同应用的同名类都可以加载，不冲突）</strong>
+<ul>
+<li><strong>大白话</strong>：这是 <strong>Tomcat 等 Web 容器</strong> 的看家本领。假设一个 Tomcat 里面同时运行了两个 Web 应用，应用 A 用的是 Spring 4.0，应用 B 用的是 Spring 5.0。如果不做隔离，由于全限定名完全一样，JVM 只会加载其中一个，另一个应用直接崩溃。Tomcat 通过为每个 Web 应用分配一个独立的自定义类加载器，完美实现了<strong>同名类的物理隔离</strong>。</li>
+</ul>
+</li>
+</ol>
+<h2><a id="__265"></a>二、 核心步骤与底层源码的闭环</h2>
+<p>写自定义类加载器的“黄金法则”：</p>
+<p><strong>1.继承ClassLoader 父类</strong></p>
+<p><strong>2.要遵从双亲委派机制,重写findClass方法</strong></p>
+<p><strong>■ 注意不是重写loadClass方法,否则不会走双亲委派机制</strong></p>
+<p><strong>3.读取类文件的字节码</strong></p>
+<p><strong>4.调用父类的defineClass方法来加载类</strong></p>
+<p><strong>5.使用者调用该类加载器的loadClass 方法</strong></p>
+<p>特别是<strong>第 2 步</strong>，点出了无数初学者最容易踩的坑。</p>
+<h3><a id="_findClass_loadClass_285"></a>为什么是重写 <code>findClass</code>，而不是 <code>loadClass</code>？</h3>
+<p>还记得你在双亲委派模式看到的 <code>loadClass</code> 源码吗？它的逻辑是：</p>
+<ol>
+<li>检查是否加载过。</li>
+<li><strong>委派给父类加载器（实现双亲委派机制）</strong>。</li>
+<li>如果父类加载器找不到，才调用 <code>findClass</code>。</li>
+</ol>
+<blockquote>
+<p><strong>关键点</strong>：JDK 的设计者已经把双亲委派的模板流程在 <code>loadClass</code> 方法里写死了（这就是<strong>模板方法模式</strong>）。</p>
+<ul>
+<li>如果你<strong>重写了 <code>loadClass</code></strong>：你就把双亲委派机制给<strong>无意间破坏</strong>了。</li>
+<li>如果你<strong>重写 <code>findClass</code></strong>：当父类加载器找不到这个类时，JVM 才会乖乖调用你重写的 <code>findClass</code> 去你指定的路径（比如 <code>E:\myclasspath</code>）读入字节码。这样<strong>既实现了自定义加载，又完美保留了双亲委派机制</strong>。</li>
+</ul>
+</blockquote>
+<h2><a id="__298"></a>三、 自定义类加载器标准代码模板</h2>
+<p>下面是一个严格按照图片 5 个步骤实现的标准代码模板：</p>
+<pre><code class="prism language-Java">import java.io.ByteArrayOutputStream;
+import java.io.FileInputStream;
+import java.io.IOException;
+
+// 步骤 1：继承 ClassLoader 父类
+public class MyClassLoader extends ClassLoader {
+    
+    private String classPath;
+
+    public MyClassLoader(String classPath) {
+        this.classPath = classPath;
+    }
+
+    // 步骤 2：重写 findClass 方法（遵循双亲委派）
+    @Override
+    protected Class&lt;?&gt; findClass(String name) throws ClassNotFoundException {
+        // 步骤 3：读取类文件的字节码
+        byte[] data = loadClassData(name);
+        if (data == null) {
+            throw new ClassNotFoundException();
+        }
+        
+        // 步骤 4：调用父类的 defineClass 方法，将字节数组转化为 Class 对象
+        return defineClass(name, data, 0, data.length);
+    }
+
+    // 步骤 3 的具体实现：从物理磁盘读取 .class 文件为字节数组
+    private byte[] loadClassData(String className) {
+        // 将包名 com.example.User 转换为路径 com/example/User.class
+        String fileName = classPath + className.replace('.', '/') + ".class";
+        
+        try (FileInputStream ins = new FileInputStream(fileName);
+             ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            int b;
+            while ((b = ins.read()) != -1) {
+                baos.write(b);
+            }
+            return baos.toByteArray();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+}
+</code></pre>
+<h3><a id="_5_349"></a>步骤 5：使用者如何调用？</h3>
+<pre><code class="prism language-Java">public class Test {
+    public static void main(String[] args) throws Exception {
+        // 1. 创建自定义类加载器，指定去 E:\myclasspath 找类
+        MyClassLoader loader = new MyClassLoader("E:/myclasspath/");
+        
+        // 2. 调用 loadClass 方法（它内部会遵从双亲委派，最终触发我们重写的 findClass）
+        Class&lt;?&gt; clazz = loader.loadClass("com.example.MyMapImplementation");
+        
+        // 3. 实例化对象并使用
+        Object instance = clazz.getDeclaredConstructor().newInstance();
+        System.out.println("类加载器是：" + clazz.getClassLoader()); 
+        // 输出将是：MyClassLoader@xxxxx
+    }
+}
+</code></pre>
+</div>
+</body>
+
+</html>

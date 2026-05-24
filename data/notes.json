@@ -100,7 +100,7 @@
   },
   {
     "id": "12-tcp-ip-01",
-    "title": "🚀 TCP/IP 网络模型面试核心考点总结",
+    "title": "TCP/IP 网络模型面试核心考点总结",
     "category": "计算机网络",
     "kind": "html",
     "file": "12-tcp-ip-01.html",
@@ -109,7 +109,7 @@
   },
   {
     "id": "13-tcp-ip-02",
-    "title": "🚀 经典面试题：键入网址到网页显示，期间发生了什么？",
+    "title": "经典面试题：键入网址到网页显示，期间发生了什么？",
     "category": "计算机网络",
     "kind": "html",
     "file": "13-tcp-ip-02.html",
@@ -169,5 +169,41 @@
     "file": "19-day03.html",
     "summary": "",
     "size": 51126
+  },
+  {
+    "id": "20-java-collections",
+    "title": "Java 集合框架超全解 · 底层源码｜集合对比｜HashMap 扩容原理",
+    "category": "Java",
+    "kind": "html",
+    "file": "20-java-collections.html",
+    "summary": "Java集合框架",
+    "size": 163975
+  },
+  {
+    "id": "21-jvm-gc",
+    "title": "JVM 垃圾回收器详解：Serial、Parallel、CMS 与 G1 的原理与实践",
+    "category": "JVM",
+    "kind": "html",
+    "file": "21-jvm-gc.html",
+    "summary": "在 JVM 中，堆内存里存放着几乎所有的对象实例。垃圾收集器在对堆进行回收前，第一步就是要确定哪些对象还“活着”，哪些已经“死去”（即不可能再被任何途径使用的对象）。",
+    "size": 44506
+  },
+  {
+    "id": "22-jvm-classloader",
+    "title": "JVM 类加载机制详解（生命周期・双亲委派・自定义加载器）",
+    "category": "JVM",
+    "kind": "html",
+    "file": "22-jvm-classloader.html",
+    "summary": "类加载器（ClassLoader）说白了只是个“搬运工”，负责把磁盘上的 .class 字节码文件拉进内存；而加载、验证、准备、解析、初始化，则是 JVM 拿到文件后，在内部进行的“组装、安检和激活”过程。",
+    "size": 28780
+  },
+  {
+    "id": "23-kafka",
+    "title": "Kafka入门教程--帮你理清所有概念和细节",
+    "category": "Kafka",
+    "kind": "html",
+    "file": "23-kafka.html",
+    "summary": "Kafka 是由 Linkedin 公司开发的，它是一个分布式的，支持多分区、多副本，基于 Zookeeper 的分布式消息流平台，它同时也是一款开源的基于发布订阅模式的消息引擎系统。",
+    "size": 47881
   }
 ]

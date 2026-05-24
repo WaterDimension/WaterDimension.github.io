@@ -1,0 +1,1578 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Java 集合框架超全解 · 底层源码｜集合对比｜HashMap 扩容原理</title>
+  <link rel="stylesheet" href="https://stackedit.io/style.css" />
+</head>
+
+<body class="stackedit">
+  <div class="stackedit__html"><p>Java集合框架</p>
+<p><img src="https://i-blog.csdnimg.cn/img_convert/30764af6f905d542b05cc61dd70a3d05.png" alt="img"></p>
+<p>Java 集合框架可以分为两条大的支线：</p>
+<p>①、Collection，主要由 List、Set、Queue 组成：</p>
+<ul>
+<li>List 代表有序、可重复的集合，典型代表就是封装了动态数组的 <a href="https://javabetter.cn/collection/arraylist.html">ArrayList</a> 和封装了链表的 <a href="https://javabetter.cn/collection/linkedlist.html">LinkedList</a>；</li>
+<li>Set 代表无序、不可重复的集合，典型代表就是 HashSet 和 TreeSet；</li>
+<li>Queue 代表队列，典型代表就是双端队列 <a href="https://javabetter.cn/collection/arraydeque.html">ArrayDeque</a>，以及优先级队列 <a href="https://javabetter.cn/collection/PriorityQueue.html">PriorityQueue</a>。</li>
+</ul>
+<p>②、Map，代表键值对的集合，典型代表就是 <a href="https://javabetter.cn/collection/hashmap.html">HashMap</a>。</p>
+<h1><a id="_14"></a>一、初识</h1>
+<h2><a id="1_List_16"></a>1. List</h2>
+<h5><a id="_18"></a>有序、可重复</h5>
+<h3><a id="11_ArrayList_20"></a>1.1 ArrayList</h3>
+<h5><a id="_22"></a>由数组实现的，支持随机存取</h5>
+<p>尾部插入和删除元素会比较快捷，从中间插入和删除元素会比较低效，因为涉及到数组元素的复制和移动</p>
+<p>内部数组的容量不足时会自动扩容，因此当元素非常庞大的时候，效率会比较低</p>
+<pre><code class="prism language-java"><span class="token comment">// 创建一个集合</span>
+<span class="token class-name">ArrayList</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">&gt;</span></span> list <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token comment">// 添加元素</span>
+list<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token string">"王二"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+list<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token string">"沉默"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+list<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token string">"陈清扬"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// 遍历集合 for 循环</span>
+<span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token keyword">int</span> i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> list<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token class-name">String</span> s <span class="token operator">=</span> list<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>i<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>s<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span class="token comment">// 遍历集合 for each</span>
+<span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token class-name">String</span> s <span class="token operator">:</span> list<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>s<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">// 删除元素</span>
+list<span class="token punctuation">.</span><span class="token function">remove</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token comment">// 遍历集合</span>
+<span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token class-name">String</span> s <span class="token operator">:</span> list<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>s<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">// 修改元素</span>
+list<span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token string">"王二狗"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token comment">// 遍历集合</span>
+<span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token class-name">String</span> s <span class="token operator">:</span> list<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>s<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h3><a id="12_LinkedList_61"></a>1.2 LinkedList</h3>
+<h5><a id="_63"></a>由双向链表实现的，不支持随机存取，只能从一端开始遍历，直到找到需要的元素后返回</h5>
+<p>任意位置插入和删除元素都很方便，因为只需要改变前一个节点和后一个节点的引用即可，不像 ArrayList 那样需要复制和移动数组元素</p>
+<p>每个元素都存储了前一个和后一个节点的引用，所以相对来说，占用的内存空间会比 ArrayList 多一些。</p>
+<p>curd和 ArrayList 几乎没什么差别。</p>
+<h3><a id="13_Vector__Stack_71"></a>1.3 Vector 和 Stack</h3>
+<h5><a id="ArrayList__Vector__Vector__getsetadd__synchronized__73"></a>ArrayList 和 Vector 非常相似，只不过 Vector 是线程安全的，像 get、set、add 这些方法都加了 <code>synchronized</code> 关键字，就导致执行效率会比较低，所以现在已经很少用了。</h5>
+<p><code>synchronized</code> 是<strong>重量级锁</strong>。当线程申请不到锁时，操作系统会将该线程挂起。这个过程涉及用户态（User Mode）<strong>向</strong>内核态（Kernel Mode）的转换。上下文切换开销巨大，涉及寄存器状态保存、堆栈切换等。</p>
+<pre><code class="prism language-java"><span class="token comment">// 比如add方法</span>
+<span class="token keyword">public</span> <span class="token keyword">synchronized</span> <span class="token keyword">boolean</span> <span class="token function">add</span><span class="token punctuation">(</span><span class="token class-name">E</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    elementData<span class="token punctuation">[</span>elementCount<span class="token operator">++</span><span class="token punctuation">]</span> <span class="token operator">=</span> e<span class="token punctuation">;</span>
+    <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h5><a id="Stack__Vector__85"></a>Stack 是 Vector 的一个子类，本质上也是由动态数组实现的，只不过还实现了先进后出的功能。</h5>
+<p>不过，由于 Stack 执行效率比较低（方法上同样加了 synchronized 关键字），就被<strong>双端队列 ArrayDeque</strong> 取代了（下面会介绍）。</p>
+<p>增删改查，和 ArrayList 和 LinkedList 几乎一样。</p>
+<h2><a id="2_Set_91"></a>2. Set</h2>
+<h5><a id="_93"></a>无序、不重复</h5>
+<h3><a id="21_HashSet_95"></a>2.1 HashSet</h3>
+<h5><a id="HashSet__HashMap__Object__97"></a>HashSet 其实是由 HashMap 实现的，只不过值由一个固定的 Object 对象填充，而键用于操作。</h5>
+<pre><code class="prism language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">HashSet</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">E</span><span class="token punctuation">&gt;</span></span>
+    <span class="token keyword">extends</span> <span class="token class-name">AbstractSet</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">E</span><span class="token punctuation">&gt;</span></span>
+    <span class="token keyword">implements</span> <span class="token class-name">Set</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">E</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">,</span> <span class="token class-name">Cloneable</span><span class="token punctuation">,</span> <span class="token class-name"><span class="token namespace">java<span class="token punctuation">.</span>io<span class="token punctuation">.</span></span>Serializable</span>
+<span class="token punctuation">{</span>
+    <span class="token keyword">private</span> <span class="token keyword">transient</span> <span class="token class-name">HashMap</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">E</span><span class="token punctuation">,</span><span class="token class-name">Object</span><span class="token punctuation">&gt;</span></span> map<span class="token punctuation">;</span>
+
+    <span class="token comment">// Dummy value to associate with an Object in the backing Map</span>
+    <span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">Object</span> <span class="token constant">PRESENT</span> <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Object</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token class-name">HashSet</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        map <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashMap</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">boolean</span> <span class="token function">add</span><span class="token punctuation">(</span><span class="token class-name">E</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> map<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>e<span class="token punctuation">,</span> <span class="token constant">PRESENT</span><span class="token punctuation">)</span><span class="token operator">==</span><span class="token keyword">null</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">boolean</span> <span class="token function">remove</span><span class="token punctuation">(</span><span class="token class-name">Object</span> o<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> map<span class="token punctuation">.</span><span class="token function">remove</span><span class="token punctuation">(</span>o<span class="token punctuation">)</span><span class="token operator">==</span><span class="token constant">PRESENT</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h6><a id="A__PRESENT_123"></a>A. 为什么需要那个 <code>PRESENT</code>？</h6>
+<ul>
+<li>
+<p><code>HashMap</code> 是存键值对（Key-Value）的，而 <code>HashSet</code> 只需要存元素（Key）。</p>
+</li>
+<li>
+<p><strong>逻辑：</strong> 为了能复用 <code>HashMap</code>，<code>HashSet</code> 把你存入的元素作为 <code>map</code> 的 <strong>Key</strong>，而 <strong>Value</strong> 则统一用这个名为 <code>PRESENT</code> 的虚拟对象填充。</p>
+</li>
+<li>
+<p><strong>为什么用 static final？</strong> 因为 <code>PRESENT</code> 只是个占位符，所有元素共享同一个对象，省内存</p>
+</li>
+</ul>
+<h6><a id="B_addE_e__130"></a>B. <code>add(E e)</code> 的逻辑</h6>
+<ul>
+<li><strong>底层：</strong> 调用了 <code>map.put(e, PRESENT)</code>。</li>
+<li><strong>返回值奥秘：</strong> * 在 <code>HashMap</code> 中，如果 <code>put</code> 一个新 Key，会返回 <code>null</code>。</li>
+<li>如果 Key 已经存在，会返回旧的 Value（也就是 <code>PRESENT</code>）。</li>
+<li><strong>结论：</strong> 如果返回 <code>null</code>，说明是新插入，<code>add</code> 成功返回 <code>true</code>；如果返回的不是 <code>null</code>，说明元素重复了，<code>add</code> 失败返回 <code>false</code>。<strong>这就是 HashSet 保证元素唯一的原理。</strong></li>
+</ul>
+<h6><a id="C_removeObject_o__137"></a>C. <code>remove(Object o)</code> 的逻辑</h6>
+<ul>
+<li>同理，调用 <code>map</code> 的删除方法。如果删掉的 Key 对应的 Value 是 <code>PRESENT</code>，说明删除成功。</li>
+</ul>
+<h6><a id="_141"></a>面经：</h6>
+<p><strong>既然 HashSet 用的就是 HashMap，那它的无序性是怎么来的？</strong></p>
+<ul>
+<li><em>答：</em> 因为 <code>HashMap</code> 的 Key 是根据 <code>hashCode</code> 分布在数组桶位里的，所以遍历出来的顺序和插入顺序不一致。</li>
+</ul>
+<p><strong>HashSet 允许存 <code>null</code> 吗？</strong></p>
+<ul>
+<li>
+<p><em>答：</em> 允许。因为 <code>HashMap</code> 的 Key 允许为 <code>null</code>（放在数组的 0 号位置）。</p>
+<pre><code class="prism language-java"><span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token keyword">int</span> <span class="token function">hash</span><span class="token punctuation">(</span><span class="token class-name">Object</span> key<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">return</span> <span class="token punctuation">(</span>key <span class="token operator">==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token operator">?</span> <span class="token number">0</span> <span class="token operator">:</span> <span class="token punctuation">(</span>h <span class="token operator">=</span> key<span class="token punctuation">.</span><span class="token function">hashCode</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">^</span> <span class="token punctuation">(</span>h <span class="token operator">&gt;&gt;&gt;</span> <span class="token number">16</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre>
+</li>
+</ul>
+<p><strong>为什么 <code>map</code> 要加 <code>transient</code> 关键字？</strong></p>
+<ul>
+<li><em>答：</em> 因为 <code>HashSet</code> 想要自己控制序列化的逻辑，而不是简单地把整个 <code>HashMap</code> 序列化，这样可以提高效率。</li>
+</ul>
+<p>HashSet 并不常用，比如，如果我们需要按照顺序存储一组元素，那么 ArrayList 和 LinkedList 可能更适合；如果我们需要存储键值对并根据键进行查找，那么 HashMap 可能更适合。</p>
+<p>HashSet 主要用于去重，比如，我们需要统计一篇文章中有多少个不重复的单词，就可以使用 HashSet 来实现。因为它是用 HashMap 实现的，HashMap的键是唯一的（哈希值），相同键的值会覆盖掉原来的值</p>
+<pre><code class="prism language-java"><span class="token class-name">HashSet</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">&gt;</span></span> set <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashSet</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// 添加元素</span>
+set<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token string">"沉默"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+set<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token string">"王二"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+set<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token string">"陈清扬"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+set<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token string">"沉默"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// 输出 HashSet 的元素个数</span>
+<span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"HashSet size: "</span> <span class="token operator">+</span> set<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// output: 3</span>
+
+<span class="token comment">// 遍历 HashSet</span>
+<span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token class-name">String</span> s <span class="token operator">:</span> set<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>s<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h3><a id="22_LinkedHashSet_185"></a>2.2 LinkedHashSet</h3>
+<h5><a id="_HashSet_HashSet__187"></a>它继承自 HashSet，并且使用链表维护了元素的插入顺序。因此，它既具有 HashSet 的快速查找、插入和删除操作的优点，又可以维护元素的插入顺序。</h5>
+<h5><a id="_LinkedHashMaphttpsjavabettercncollectionlinkedhashmaphtml__189"></a>其实是由 <a href="https://javabetter.cn/collection/linkedhashmap.html">LinkedHashMap</a> 实现的。</h5>
+<p>这是 LinkedHashSet 的无参构造方法：</p>
+<pre><code>public LinkedHashSet() {
+    super(16, .75f, true);
+}
+</code></pre>
+<p><a href="https://javabetter.cn/oo/this-super.html">super</a> 的意思是它将调用父类的 HashSet 的一个有参构造方法：</p>
+<pre><code>HashSet(int initialCapacity, float loadFactor, boolean dummy) {
+    map = new LinkedHashMap&lt;&gt;(initialCapacity, loadFactor);
+}
+</code></pre>
+<pre><code>LinkedHashSet&lt;String&gt; set = new LinkedHashSet&lt;&gt;();
+// 添加元素
+set.add("沉默");
+set.add("王二");
+set.add("陈清扬");
+
+// 删除元素
+set.remove("王二");
+
+// 修改元素
+set.remove("沉默");
+set.add("沉默的力量");
+
+// 查找元素
+boolean hasChenQingYang = set.contains("陈清扬");
+System.out.println("set包含陈清扬吗？" + hasChenQingYang);
+</code></pre>
+<h3><a id="23_TreeSet_228"></a>2.3 TreeSet</h3>
+<h5><a id="TreeMapObject_230"></a>由TreeMap实现，同样的键位，值由一个固定的Object对象填充。</h5>
+<p>需要注意的是，TreeSet 不允许插入 null 元素，否则会抛出 NullPointerException 异常。(底层是 <code>TreeMap</code>，它是一棵 <strong>红黑树</strong>（一种自平衡的二叉搜索树）。)</p>
+<pre><code class="prism language-java"><span class="token comment">// 创建一个 TreeSet 对象</span>
+<span class="token class-name">TreeSet</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">&gt;</span></span> set <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">TreeSet</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// 添加元素</span>
+set<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token string">"沉默"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+set<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token string">"王二"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+set<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token string">"陈清扬"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>set<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 输出 [沉默, 王二, 陈清扬]</span>
+
+<span class="token comment">// 删除元素</span>
+set<span class="token punctuation">.</span><span class="token function">remove</span><span class="token punctuation">(</span><span class="token string">"王二"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>set<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 输出 [沉默, 陈清扬]</span>
+
+<span class="token comment">// 修改元素：TreeSet 中的元素不支持直接修改，需要先删除再添加</span>
+set<span class="token punctuation">.</span><span class="token function">remove</span><span class="token punctuation">(</span><span class="token string">"陈清扬"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+set<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token string">"陈青阳"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>set<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 输出 [沉默, 陈青阳]</span>
+
+<span class="token comment">// 查找元素</span>
+<span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>set<span class="token punctuation">.</span><span class="token function">contains</span><span class="token punctuation">(</span><span class="token string">"沉默"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 输出 true</span>
+</code></pre>
+<h3><a id="Set__Map__Map__257"></a>Set 集合不是关注的重点，因为底层都是由 Map 实现的，为什么要用 Map 实现呢？</h3>
+<p>答：  Map 的键不重复、无序</p>
+<h2><a id="3_Queue_261"></a>3. Queue</h2>
+<h3><a id="31_ArrayDque_263"></a>3.1 ArrayDque</h3>
+<h5><a id="_265"></a>基于数组实现的双端队列，为了满足可以同时在数组两端插入或删除元素的需求，数组必须是循环的，也就是说数组的任何一点都可以被看作是起点或者终点。</h5>
+<h5><a id="___List__267"></a><strong>注意：</strong> 因为 没实现 <code>List</code> 接口，所以你在代码里不能直接用下标取值，这是设计上的权衡。</h5>
+<p><strong>硬要转下标：</strong> 先用 <code>toArray()</code> 转成普通数组，或者干脆直接改用 <code>ArrayList</code>。</p>
+<p>head 指向队首的第一个有效的元素，tail 指向队尾第一个可以插入元素的空位，因为是循环数组，所以 head 不一定从是从 0 开始，tail 也不一定总是比 head 大。</p>
+<h5><a id="imghttpsiblogcsdnimgcnimg_convert6183b204b50f53c88e596b5c3d087acbpng_273"></a><img src="https://i-blog.csdnimg.cn/img_convert/6183b204b50f53c88e596b5c3d087acb.png" alt="img"></h5>
+<pre><code class="prism language-java"><span class="token comment">// 创建一个ArrayDeque</span>
+<span class="token class-name">ArrayDeque</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">&gt;</span></span> deque <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayDeque</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// 添加元素</span>
+deque<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token string">"沉默"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+deque<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token string">"王二"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+deque<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token string">"陈清扬"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// 删除元素</span>
+deque<span class="token punctuation">.</span><span class="token function">remove</span><span class="token punctuation">(</span><span class="token string">"王二"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// 修改元素</span>
+deque<span class="token punctuation">.</span><span class="token function">remove</span><span class="token punctuation">(</span><span class="token string">"沉默"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+deque<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token string">"沉默的力量"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// 查找元素</span>
+<span class="token keyword">boolean</span> hasChenQingYang <span class="token operator">=</span> deque<span class="token punctuation">.</span><span class="token function">contains</span><span class="token punctuation">(</span><span class="token string">"陈清扬"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"deque包含陈清扬吗？"</span> <span class="token operator">+</span> hasChenQingYang<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<h3><a id="32_LinkedList_296"></a>3.2 LinkedList</h3>
+<h5><a id="_List__Deque_LinkedList__StackQueue_298"></a>应该归在 List 下，只不过，它也实现了 Deque 接口，可以作为队列来使用。等于说，LinkedList 同时实现了 Stack、Queue。</h5>
+<pre><code class="prism language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">LinkedList</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">E</span><span class="token punctuation">&gt;</span></span>
+    <span class="token keyword">extends</span> <span class="token class-name">AbstractSequentialList</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">E</span><span class="token punctuation">&gt;</span></span>
+    <span class="token keyword">implements</span> <span class="token class-name">List</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">E</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">,</span> <span class="token class-name">Deque</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">E</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">,</span> <span class="token class-name">Cloneable</span><span class="token punctuation">,</span> <span class="token class-name"><span class="token namespace">java<span class="token punctuation">.</span>io<span class="token punctuation">.</span></span>Serializable</span>
+</code></pre>
+<p>换句话说，LinkedList 和 ArrayDeque 都是 Java 集合框架中的双向队列（deque），它们都<strong>支持在队列的两端进行元素的插入和删除操作</strong>。不过，LinkedList 和 ArrayDeque 在实现上有一些不同：</p>
+<ol>
+<li>
+<p>底层实现方式不同：LinkedList 是基于链表实现的，而 ArrayDeque 是基于数组实现的。</p>
+</li>
+<li>
+<p>随机访问的效率不同：由于底层实现方式的不同，LinkedList 对于随机访问的效率较低，时间复杂度为 O(n)，而 ArrayDeque 可以通过下标随机访问元素，时间复杂度为 O(1)。</p>
+<p>解释：</p>
+<p>​		<strong>LinkedList (O(n))</strong>：如果你想找第 5 个人，你必须从第 1 个开始问：“谁是你后面那个？”，问 4 次才能找到。</p>
+<p>​	<strong>ArrayDeque (O(1))</strong>：虽然 <code>ArrayDeque</code> 并没有提供 <code>get(i)</code> 这样的公共 API（因为它主要为了队列操作设计），但从底层逻辑上说，它计算位置只需要一个公式：<code>(head + index) % array.length</code>。)</p>
+</li>
+<li>
+<p>内存占用不同：由于 LinkedList 是基于链表实现的，它在存储元素时需要额外的空间来存储链表节点，因此内存占用相对较高，而 ArrayDeque 是基于数组实现的，内存占用相对较低。</p>
+</li>
+</ol>
+<p>一段 LinkedList 作为队列时候的增删改查吧，注意和它作为 List 的时候有很大的不同。</p>
+<pre><code>// 创建一个 LinkedList 对象
+LinkedList&lt;String&gt; queue = new LinkedList&lt;&gt;();
+
+// 添加元素
+queue.offer("沉默");
+queue.offer("王二");
+queue.offer("陈清扬");
+System.out.println(queue); // 输出 [沉默, 王二, 陈清扬]
+
+// 删除元素
+queue.poll();
+System.out.println(queue); // 输出 [王二, 陈清扬]
+
+// 修改元素：LinkedList 中的元素不支持直接修改，需要先删除再添加
+String first = queue.poll();
+queue.offer("王大二");
+System.out.println(queue); // 输出 [陈清扬, 王大二]
+
+// 查找元素：LinkedList 中的元素可以使用 get() 方法进行查找
+System.out.println(queue.get(0)); // 输出 陈清扬
+System.out.println(queue.contains("沉默")); // 输出 false
+
+// 查找元素：使用迭代器的方式查找陈清扬
+// 使用迭代器依次遍历元素并查找
+Iterator&lt;String&gt; iterator = queue.iterator();
+while (iterator.hasNext()) {
+    String element = iterator.next();
+    if (element.equals("陈清扬")) {
+        System.out.println("找到了：" + element);
+        break;
+    }
+}
+</code></pre>
+<h3><a id="33_PriorityQueue_357"></a>3.3 PriorityQueue</h3>
+<h5><a id="_remove__poll__359"></a>出队顺序与元素的优先级有关，执行 remove 或者 poll 方法，返回的总是优先级最高的元素。</h5>
+<pre><code class="prism language-java"><span class="token comment">// 创建一个 PriorityQueue 对象</span>
+<span class="token class-name">PriorityQueue</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">&gt;</span></span> queue <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">PriorityQueue</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// 添加元素</span>
+queue<span class="token punctuation">.</span><span class="token function">offer</span><span class="token punctuation">(</span><span class="token string">"沉默"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+queue<span class="token punctuation">.</span><span class="token function">offer</span><span class="token punctuation">(</span><span class="token string">"王二"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+queue<span class="token punctuation">.</span><span class="token function">offer</span><span class="token punctuation">(</span><span class="token string">"陈清扬"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>queue<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 输出 [沉默, 王二, 陈清扬]</span>
+
+<span class="token comment">// 删除元素</span>
+queue<span class="token punctuation">.</span><span class="token function">poll</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>queue<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 输出 [王二, 陈清扬]</span>
+
+<span class="token comment">// 修改元素：PriorityQueue 不支持直接修改元素，需要先删除再添加</span>
+<span class="token class-name">String</span> first <span class="token operator">=</span> queue<span class="token punctuation">.</span><span class="token function">poll</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+queue<span class="token punctuation">.</span><span class="token function">offer</span><span class="token punctuation">(</span><span class="token string">"张三"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>queue<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 输出 [张三, 陈清扬]</span>
+
+<span class="token comment">// 查找元素：PriorityQueue 不支持随机访问元素，只能访问队首元素</span>
+<span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>queue<span class="token punctuation">.</span><span class="token function">peek</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 输出 张三</span>
+<span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>queue<span class="token punctuation">.</span><span class="token function">contains</span><span class="token punctuation">(</span><span class="token string">"陈清扬"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 输出 true</span>
+
+<span class="token comment">// 通过 for 循环的方式查找陈清扬</span>
+<span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token class-name">String</span> element <span class="token operator">:</span> queue<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>element<span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span><span class="token string">"陈清扬"</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"找到了："</span> <span class="token operator">+</span> element<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">break</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<pre><code class="prism language-java"><span class="token keyword">class</span> <span class="token class-name">StudentComparator</span> <span class="token keyword">implements</span> <span class="token class-name">Comparator</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">Student</span><span class="token punctuation">&gt;</span></span> <span class="token punctuation">{</span>
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">int</span> <span class="token function">compare</span><span class="token punctuation">(</span><span class="token class-name">Student</span> s1<span class="token punctuation">,</span> <span class="token class-name">Student</span> s2<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment">// 比较总成绩</span>
+        <span class="token keyword">return</span> <span class="token class-name">Integer</span><span class="token punctuation">.</span><span class="token function">compare</span><span class="token punctuation">(</span>s2<span class="token punctuation">.</span><span class="token function">getChineseScore</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">+</span> s2<span class="token punctuation">.</span><span class="token function">getMathScore</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+                s1<span class="token punctuation">.</span><span class="token function">getChineseScore</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">+</span> s1<span class="token punctuation">.</span><span class="token function">getMathScore</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">//compare(o1, o2) 约定中，有一个核心逻辑：如果返回正数，前面的元素（o1）就会排在后面。</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+ <span class="token comment">// 创建一个按照总成绩排序的优先级队列</span>
+  <span class="token class-name">PriorityQueue</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">Student</span><span class="token punctuation">&gt;</span></span> queue <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">PriorityQueue</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">StudentComparator</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token comment">// Collections.sort(students, new StudentComparator());</span>
+</code></pre>
+<h3><a id="3_Map_408"></a>3. Map</h3>
+<h5><a id="_410"></a>保存的是键值对，键要求保持唯一性，值可以重复</h5>
+<h3><a id="31_HashMap_412"></a>3.1 HashMap</h3>
+<h5><a id="_Map__414"></a>实现了 Map 接口，可以根据键快速地查找对应的值——通过哈希函数将键映射到哈希表中的一个索引位置，从而实现快速访问。</h5>
+<p>这里先大致了解一下 HashMap 的特点</p>
+<ul>
+<li>HashMap 中的键和值都可以为 null。如果键为 null，则将该键映射到哈希表的第一个位置。</li>
+<li>可以使用迭代器或者 forEach 方法遍历 HashMap 中的键值对。</li>
+<li>HashMap 有一个初始容量和一个负载因子。初始容量是指哈希表的初始大小，负载因子是指哈希表在扩容之前可以存储的键值对数量与哈希表大小的比率。默认的初始容量是 16，负载因子是 0.75。</li>
+</ul>
+<pre><code class="prism language-java"><span class="token comment">// 创建一个 HashMap 对象</span>
+<span class="token class-name">HashMap</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">,</span> <span class="token class-name">String</span><span class="token punctuation">&gt;</span></span> hashMap <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashMap</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// 添加键值对</span>
+hashMap<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span><span class="token string">"沉默"</span><span class="token punctuation">,</span> <span class="token string">"cenzhong"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+hashMap<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span><span class="token string">"王二"</span><span class="token punctuation">,</span> <span class="token string">"wanger"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+hashMap<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span><span class="token string">"陈清扬"</span><span class="token punctuation">,</span> <span class="token string">"chenqingyang"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// 获取指定键的值</span>
+<span class="token class-name">String</span> value1 <span class="token operator">=</span> hashMap<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token string">"沉默"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"沉默对应的值为："</span> <span class="token operator">+</span> value1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// 修改键对应的值</span>
+hashMap<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span><span class="token string">"沉默"</span><span class="token punctuation">,</span> <span class="token string">"chenmo"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token class-name">String</span> value2 <span class="token operator">=</span> hashMap<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token string">"沉默"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"修改后沉默对应的值为："</span> <span class="token operator">+</span> value2<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// 删除指定键的键值对</span>
+hashMap<span class="token punctuation">.</span><span class="token function">remove</span><span class="token punctuation">(</span><span class="token string">"王二"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// 遍历 HashMap</span>
+<span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token class-name">String</span> key <span class="token operator">:</span> hashMap<span class="token punctuation">.</span><span class="token function">keySet</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token class-name">String</span> value <span class="token operator">=</span> hashMap<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>key <span class="token operator">+</span> <span class="token string">" 对应的值为："</span> <span class="token operator">+</span> value<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h3><a id="32_LinkedHashMap_450"></a>3.2 LinkedHashMap</h3>
+<h5><a id="HashMap__Map_LinkedHashMaphttpsjavabettercncollectionlinkedhashmaphtmlLinkedHashMap__HashMap__452"></a>HashMap 已经非常强大了，但它是无序的，没有维持键值对的插入顺序。如果我们需要一个有序的 Map，就要用到 <a href="https://javabetter.cn/collection/linkedhashmap.html">LinkedHashMap</a>。LinkedHashMap 是 HashMap 的子类，它使用链表来记录插入/访问元素的顺序。</h5>
+<p>LinkedHashMap 可以看作是 HashMap + LinkedList 的合体，它使用了哈希表来存储数据，又用了双向链表来维持顺序。</p>
+<pre><code class="prism language-java"><span class="token comment">// 创建一个 LinkedHashMap，插入的键值对为 沉默 王二 陈清扬</span>
+<span class="token class-name">LinkedHashMap</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">,</span> <span class="token class-name">String</span><span class="token punctuation">&gt;</span></span> linkedHashMap <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">LinkedHashMap</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+linkedHashMap<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span><span class="token string">"沉默"</span><span class="token punctuation">,</span> <span class="token string">"cenzhong"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+linkedHashMap<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span><span class="token string">"王二"</span><span class="token punctuation">,</span> <span class="token string">"wanger"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+linkedHashMap<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span><span class="token string">"陈清扬"</span><span class="token punctuation">,</span> <span class="token string">"chenqingyang"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// 遍历 LinkedHashMap</span>
+<span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token class-name">String</span> key <span class="token operator">:</span> linkedHashMap<span class="token punctuation">.</span><span class="token function">keySet</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token class-name">String</span> value <span class="token operator">=</span> linkedHashMap<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>key <span class="token operator">+</span> <span class="token string">" 对应的值为："</span> <span class="token operator">+</span> value<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span class="token comment">//输出</span>
+沉默 对应的值为：cenzhong
+王二 对应的值为：wanger
+陈清扬 对应的值为：chenqingyang
+</code></pre>
+<h3><a id="33_TreeMap_474"></a>3.3 TreeMap</h3>
+<h5><a id="_SortedMap__476"></a>实现了 SortedMap 接口，可以自动将键按照自然顺序或指定的比较器顺序排序，并保证其元素的顺序。内部使用红黑树来实现键的排序和查找。</h5>
+<pre><code class="prism language-java"><span class="token comment">// 创建一个 TreeMap 对象</span>
+<span class="token class-name">Map</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">,</span> <span class="token class-name">String</span><span class="token punctuation">&gt;</span></span> treeMap <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">TreeMap</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// 向 TreeMap 中添加键值对</span>
+treeMap<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span><span class="token string">"沉默"</span><span class="token punctuation">,</span> <span class="token string">"cenzhong"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+treeMap<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span><span class="token string">"王二"</span><span class="token punctuation">,</span> <span class="token string">"wanger"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+treeMap<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span><span class="token string">"陈清扬"</span><span class="token punctuation">,</span> <span class="token string">"chenqingyang"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// 查找键值对</span>
+<span class="token class-name">String</span> name <span class="token operator">=</span> <span class="token string">"沉默"</span><span class="token punctuation">;</span>
+<span class="token keyword">if</span> <span class="token punctuation">(</span>treeMap<span class="token punctuation">.</span><span class="token function">containsKey</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"找到了 "</span> <span class="token operator">+</span> name <span class="token operator">+</span> <span class="token string">": "</span> <span class="token operator">+</span> treeMap<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+    <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"没有找到 "</span> <span class="token operator">+</span> name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">// 修改键值对</span>
+name <span class="token operator">=</span> <span class="token string">"王二"</span><span class="token punctuation">;</span>
+<span class="token keyword">if</span> <span class="token punctuation">(</span>treeMap<span class="token punctuation">.</span><span class="token function">containsKey</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"修改前的 "</span> <span class="token operator">+</span> name <span class="token operator">+</span> <span class="token string">": "</span> <span class="token operator">+</span> treeMap<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    treeMap<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>name<span class="token punctuation">,</span> <span class="token string">"newWanger"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"修改后的 "</span> <span class="token operator">+</span> name <span class="token operator">+</span> <span class="token string">": "</span> <span class="token operator">+</span> treeMap<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+    <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"没有找到 "</span> <span class="token operator">+</span> name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">// 删除键值对</span>
+name <span class="token operator">=</span> <span class="token string">"陈清扬"</span><span class="token punctuation">;</span>
+<span class="token keyword">if</span> <span class="token punctuation">(</span>treeMap<span class="token punctuation">.</span><span class="token function">containsKey</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"删除前的 "</span> <span class="token operator">+</span> name <span class="token operator">+</span> <span class="token string">": "</span> <span class="token operator">+</span> treeMap<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    treeMap<span class="token punctuation">.</span><span class="token function">remove</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"删除后的 "</span> <span class="token operator">+</span> name <span class="token operator">+</span> <span class="token string">": "</span> <span class="token operator">+</span> treeMap<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+    <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"没有找到 "</span> <span class="token operator">+</span> name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">// 遍历 TreeMap</span>
+<span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token class-name">Map<span class="token punctuation">.</span>Entry</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">,</span> <span class="token class-name">String</span><span class="token punctuation">&gt;</span></span> entry <span class="token operator">:</span> treeMap<span class="token punctuation">.</span><span class="token function">entrySet</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>entry<span class="token punctuation">.</span><span class="token function">getKey</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">+</span> <span class="token string">": "</span> <span class="token operator">+</span> entry<span class="token punctuation">.</span><span class="token function">getValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>与 HashMap 不同的是，TreeMap 会按照键的顺序来进行排序。</p>
+<p><img src="https://img-home.csdnimg.cn/images/20230724024159.png?origin_url=D%3A%5CTypora_notebook%5Cimage-20260511222107741.png&amp;pos_id=img-WyVQc9Pc-1779631076207" alt="外链图片转存失败,源站可能有防盗链机制,建议将图片保存下来直接上传"></p>
+<p>既然要准备面试，光背分类是不够的，面试官常会顺着分类问你：“那你平时怎么操作这些集合？”</p>
+<p>掌握以下这些 <strong>核心 API</strong>，不仅能应付面试，写代码时也能得心应手。</p>
+<hr>
+<h3><a id="1_List__API__543"></a>1. List 接口常用 API (有序、可重复)</h3>
+<p>List 是开发中最常用的，重点在于<strong>下标操作</strong>和<strong>排序</strong>。</p>
+<ul>
+<li><strong>添加：</strong> <code>add(E e)</code> (末尾添加), <code>add(int index, E element)</code> (指定位置插入)。</li>
+<li><strong>获取/修改：</strong> <code>get(int index)</code> (按索引查), <code>set(int index, E element)</code> (按索引改)。</li>
+<li><strong>删除：</strong> <code>remove(int index)</code>, <code>remove(Object o)</code>。</li>
+<li><strong>判断：</strong> <code>size()</code>, <code>isEmpty()</code>, <code>contains(Object o)</code>。</li>
+<li><strong>排序 (Java 8+)：</strong> <code>list.sort(Comparator.naturalOrder())</code>。</li>
+<li><strong>转换：</strong> <code>toArray()</code> (转数组)。</li>
+</ul>
+<h3><a id="2_Set__API__554"></a>2. Set 接口常用 API (无序、唯一)</h3>
+<p>Set 的 API 和 List 类似，但<strong>没有下标操作</strong>（因为它是无序的）。</p>
+<ul>
+<li><strong>添加：</strong> <code>add(E e)</code> (如果元素已存在，返回 <code>false</code>)。</li>
+<li><strong>删除：</strong> <code>remove(Object o)</code>。</li>
+<li><strong>判断：</strong> <code>contains(Object o)</code> (这是 Set 的强项，查询极快)。</li>
+<li><strong>交集/并集：</strong> <code>retainAll</code> (交集), <code>addAll</code> (并集)。</li>
+</ul>
+<h3><a id="3_Queue__API__563"></a>3. Queue 接口常用 API (先进先出)</h3>
+<p>面试时如果提到 Queue，一定要分清“抛异常”和“返回特殊值”的两组方法。</p>
+<ul>
+<li><strong>入队：</strong> <code>offer(E e)</code> (推荐，失败返回 false) vs <code>add(e)</code> (失败抛异常)。</li>
+<li><strong>出队：</strong> <code>poll()</code> (推荐，队空返回 null) vs <code>remove()</code> (队空抛异常)。</li>
+<li><strong>看队头：</strong> <code>peek()</code> (推荐，队空返回 null) vs <code>element()</code> (队空抛异常)。</li>
+</ul>
+<h3><a id="4_Map__API__571"></a>4. Map 接口常用 API (键值对)</h3>
+<p>Map 不属于 <code>Collection</code> 接口，它的操作逻辑完全不同。</p>
+<ul>
+<li><strong>存取：</strong> <code>put(K key, V value)</code>, <code>get(Object key)</code>。</li>
+<li><strong>安全取值：</strong> <code>getOrDefault(key, defaultValue)</code> (防空指针的神器)。</li>
+<li><strong>判断：</strong> <code>containsKey(key)</code>, <code>containsValue(value)</code>。</li>
+<li><strong>删除：</strong> <code>remove(key)</code>。</li>
+<li><strong>遍历 (面试高频)：</strong>
+<ul>
+<li><code>keySet()</code>：获取所有键。</li>
+<li><code>values()</code>：获取所有值。</li>
+<li><code>entrySet()</code>：获取所有键值对（性能最高）。</li>
+</ul>
+</li>
+<li><strong>修改：</strong> <code>putIfAbsent(key, value)</code> (不存在才存)。</li>
+</ul>
+<hr>
+<h3><a id="__587"></a>💡 面试突击：集合类关系图</h3>
+<p>为了方便你记忆它们之间的继承关系，可以参考这张经典的结构图：</p>
+<hr>
+<h3><a id="__593"></a>🚀 避坑指南（面试常问）</h3>
+<ol>
+<li><strong>ArrayList vs LinkedList：</strong>
+<ul>
+<li>ArrayList 查改快（数组下标直达 <span class="katex--inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><mn>1</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(1)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mord mathnormal" style="margin-right: 0.0278em;">O</span><span class="mopen">(</span><span class="mord">1</span><span class="mclose">)</span></span></span></span></span>），增删慢（涉及元素移动）。</li>
+<li>LinkedList 增删快（改指针即可 <span class="katex--inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><mn>1</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(1)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mord mathnormal" style="margin-right: 0.0278em;">O</span><span class="mopen">(</span><span class="mord">1</span><span class="mclose">)</span></span></span></span></span>），查询慢（需要从头遍历）。</li>
+</ul>
+</li>
+<li><strong>HashMap 的底层：</strong>
+<ul>
+<li>数组 + 链表 + 红黑树（Java 8 改进）。</li>
+</ul>
+</li>
+<li><strong>线程安全：</strong>
+<ul>
+<li>以上提到的 API 大多是<strong>线程不安全</strong>的。如果面试官问线程安全，记得提 <code>Vector</code> (老古董) 或 <code>ConcurrentHashMap</code> (现代方案)。</li>
+</ul>
+</li>
+</ol>
+<h1><a id="_605"></a>二、源码分析</h1>
+<h2><a id="1_ArrayListhttpsjavabettercncollectionarraylisthtml_01arraylist_607"></a><a href="https://javabetter.cn/collection/arraylist.html#_01%E3%80%81%E5%88%9B%E5%BB%BA-arraylist">1. ArrayList</a></h2>
+<p>ArrayList 实现了 List 接口，并且是基于数组实现的。</p>
+<h5><a id="ArrayList__611"></a>ArrayList 在数组的基础上实现了自动扩容，并且提供了比数组更丰富的预定义方法（各种增删改查），非常灵活。</h5>
+<h5><a id="ArrayList__Object__null__613"></a>ArrayList 的底层是 Object 数组，允许存储 null 元素</h5>
+<p>ArrayList 可以称得上是集合框架方面最常用的类了，可以和 HashMap 一较高下。</p>
+<pre><code class="prism language-java"><span class="token class-name">List</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">&gt;</span></span> alist <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<p>由于 ArrayList 实现了 List 接口，所以 alist 变量的类型可以是 List 类型；new 关键字声明后的尖括号中可以不再指定元素的类型，因为编译器可以通过前面尖括号中的类型进行智能推断。</p>
+<p>此时会调用无参构造方法（见下面的代码）创建一个空的数组，常量DEFAULTCAPACITY_EMPTY_ELEMENTDATA的值为 <code>{}</code>。</p>
+<pre><code class="prism language-java"><span class="token comment">// 有参构造(容量=0)专用：空数组</span>
+<span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">Object</span><span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token constant">EMPTY_ELEMENTDATA</span> <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+<span class="token comment">// 无参构造专用：默认空数组</span>
+<span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">Object</span><span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token constant">DEFAULTCAPACITY_EMPTY_ELEMENTDATA</span> <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+
+<span class="token keyword">public</span> <span class="token class-name">ArrayList</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">this</span><span class="token punctuation">.</span>elementData <span class="token operator">=</span> <span class="token constant">DEFAULTCAPACITY_EMPTY_ELEMENTDATA</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span class="token comment">// 有参构造(0)</span>
+<span class="token keyword">public</span> <span class="token class-name">ArrayList</span><span class="token punctuation">(</span><span class="token keyword">int</span> initialCapacity<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>initialCapacity <span class="token operator">&gt;</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment">// ... 创建指定大小数组</span>
+    <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>initialCapacity <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>elementData <span class="token operator">=</span> <span class="token constant">EMPTY_ELEMENTDATA</span><span class="token punctuation">;</span> <span class="token comment">// 赋值第二个空数组！！！</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>如果非常确定 ArrayList 中元素的个数，在创建的时候还可以指定初始大小。</p>
+<pre><code class="prism language-java"><span class="token class-name">List</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">&gt;</span></span> alist <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token number">20</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<p>这样做的好处是，可以有效地避免在添加新的元素时进行不必要的扩容</p>
+<h3><a id="11__653"></a>1.1 添加元素</h3>
+<pre><code class="prism language-java">alist<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token string">"frank"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<p>堆栈过程图示：<br>
+add(element)<br>
+└── if (size == elementData.length) // 判断是否需要扩容<br>
+├── grow(minCapacity) // 扩容<br>
+│   └── newCapacity = oldCapacity + (oldCapacity &gt;&gt; 1) // 计算新的数组容量<br>
+│   └── Arrays.copyOf(elementData, newCapacity) // 创建新的数组<br>
+├── elementData[size++] = element; // 添加新元素<br>
+└── return true; // 添加成功</p>
+<p>来具体看一下，先是 <code>add()</code> 方法的源码（已添加好详细地注释）</p>
+<pre><code class="prism language-java"><span class="token comment">/**
+ * 将指定元素添加到 ArrayList 的末尾
+ * @param e 要添加的元素
+ * @return 添加成功返回 true
+ */</span>
+<span class="token keyword">public</span> <span class="token keyword">boolean</span> <span class="token function">add</span><span class="token punctuation">(</span><span class="token class-name">E</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token function">ensureCapacityInternal</span><span class="token punctuation">(</span>size <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">// 确保 ArrayList 能够容纳新的元素</span>
+    elementData<span class="token punctuation">[</span>size<span class="token operator">++</span><span class="token punctuation">]</span> <span class="token operator">=</span> e<span class="token punctuation">;</span> <span class="token comment">// 在 ArrayList 的末尾添加指定元素</span>
+    <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>当你调用 <code>add(e)</code> 时，入参是 <code>size + 1</code>（即：我最少需要能装下这么多元素的空间）。它的内部逻辑通常遵循这三个步骤：</p>
+<h4><a id="_685"></a>第一步：计算容量</h4>
+<pre><code class="prism language-java"><span class="token comment">/**
+ * @param minCapacity 指定容量的最小值
+ */</span>
+<span class="token keyword">private</span> <span class="token keyword">void</span> <span class="token function">ensureCapacityInternal</span><span class="token punctuation">(</span><span class="token keyword">int</span> minCapacity<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>elementData <span class="token operator">==</span> <span class="token constant">DEFAULTCAPACITY_EMPTY_ELEMENTDATA</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment">// 如果 elementData 还是默认的空数组</span>
+        minCapacity <span class="token operator">=</span> <span class="token class-name">Math</span><span class="token punctuation">.</span><span class="token function">max</span><span class="token punctuation">(</span><span class="token constant">DEFAULT_CAPACITY</span><span class="token punctuation">,</span> minCapacity<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 使用 DEFAULT_CAPACITY 和指定容量的最小值中的较大值</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token function">ensureExplicitCapacity</span><span class="token punctuation">(</span>minCapacity<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 确保容量能够容纳指定容量的元素</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<ul>
+<li>参数 minCapacity 为 1（size+1 传过来的）</li>
+<li>elementData 为存放 ArrayList 元素的底层数组，前面声明 ArrayList 的时候讲过了，此时为空 <code>{}</code></li>
+<li>DEFAULTCAPACITY_EMPTY_ELEMENTDATA 前面也讲过了，为 <code>{}</code></li>
+</ul>
+<p>所以，if 条件此时为 true，if 语句<code>minCapacity = Math.max(DEFAULT_CAPACITY, minCapacity)</code>要执行。</p>
+<p>DEFAULT_CAPACITY 为 10（见下面的代码），所以执行完这行代码后，minCapacity 为 10，<code>Math.max()</code> 方法的作用是取两个当中最大的那个。</p>
+<pre><code class="prism language-java"><span class="token comment">// JDK 固定定义：默认容量就是 10</span>
+<span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token keyword">int</span> <span class="token constant">DEFAULT_CAPACITY</span> <span class="token operator">=</span> <span class="token number">10</span><span class="token punctuation">;</span>
+</code></pre>
+<p>接下来执行 <code>ensureExplicitCapacity()</code> 方法，来看一下源码：</p>
+<pre><code class="prism language-java"><span class="token comment">/**
+ * 检查并确保集合容量足够，如果需要则增加集合容量。
+ *
+ * @param minCapacity 所需最小容量
+ */</span>
+<span class="token keyword">private</span> <span class="token keyword">void</span> <span class="token function">ensureExplicitCapacity</span><span class="token punctuation">(</span><span class="token keyword">int</span> minCapacity<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token comment">// 检查是否超出了数组范围，确保不会溢出</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>minCapacity <span class="token operator">-</span> elementData<span class="token punctuation">.</span>length <span class="token operator">&gt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+        <span class="token comment">// 如果需要增加容量，则调用 grow 方法</span>
+        <span class="token function">grow</span><span class="token punctuation">(</span>minCapacity<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>此时：</p>
+<ul>
+<li>参数 minCapacity 为 10</li>
+<li>elementData.length 为 0（数组为空）</li>
+</ul>
+<p>所以 10-0&gt;0，if 条件为 true，进入 if 语句执行 <code>grow()</code> 方法，来看源码：</p>
+<pre><code>/**
+ * 扩容 ArrayList 的方法，确保能够容纳指定容量的元素
+ * @param minCapacity 指定容量的最小值
+ */
+private void grow(int minCapacity) {
+    // 检查是否会导致溢出，oldCapacity 为当前数组长度
+    int oldCapacity = elementData.length;
+    int newCapacity = oldCapacity + (oldCapacity &gt;&gt; 1); // 扩容至原来的1.5倍
+    if (newCapacity - minCapacity &lt; 0) // 如果还是小于指定容量的最小值
+        newCapacity = minCapacity; // 直接扩容至指定容量的最小值
+    if (newCapacity - MAX_ARRAY_SIZE &gt; 0) // 如果超出了数组的最大长度
+        newCapacity = hugeCapacity(minCapacity); // 扩容至数组的最大长度
+    // 将当前数组复制到一个新数组中，长度为 newCapacity
+    elementData = Arrays.copyOf(elementData, newCapacity);
+}
+</code></pre>
+<p>新数组 = Arrays.copyOf(旧数组, 新数组的长度);</p>
+<p>此时：</p>
+<ul>
+<li>参数 minCapacity 为 10</li>
+<li>变量 oldCapacity 为 0</li>
+</ul>
+<p>所以 newCapacity 也为 0，于是 <code>newCapacity - minCapacity</code> 等于 -10 小于 0，于是第一个 if 条件为 true，执行第一个 if 语句 <code>newCapacity = minCapacity</code>，然后 newCapacity 为 10。</p>
+<p>紧接着执行 <code>elementData = Arrays.copyOf(elementData, newCapacity);</code>，也就是进行<strong>数组的第一次扩容，长度为 10。</strong></p>
+<p>回到 <code>add()</code> 方法：</p>
+<pre><code>public boolean add(E e) {
+    ensureCapacityInternal(size + 1);
+    elementData[size++] = e;
+    return true;
+}
+</code></pre>
+<p>执行 <code>elementData[size++] = e</code>。</p>
+<p>此时：</p>
+<ul>
+<li>size 为 0</li>
+<li>e 为 “沉默王二”</li>
+</ul>
+<p>所以数组的第一个元素（下标为 0） 被赋值为“沉默王二”，接着返回 true，第一次 add 方法执行完毕。</p>
+<p>PS：add 过程中会遇到一个令新手感到困惑的右移操作符 <code>&gt;&gt;</code>，借这个机会来解释一下。</p>
+<p>ArrayList 在第一次执行 add 后会扩容为 10，那 ArrayList 第二次扩容发生在什么时候呢？</p>
+<p>答案是添加第 11 个元素时，大家可以尝试分析一下这个过程。</p>
+<h4><a id="_794"></a>为什么要这么设计？</h4>
+<p>如果数组每次只增加 1 个容量，那么每次 <code>add</code> 都要进行 <code>Arrays.copyOf</code>（内存拷贝），性能会极其低下。</p>
+<ul>
+<li><strong>1.5 倍的艺术：</strong> 这是一个平衡点。扩容太快（比如 2 倍、4 倍）会浪费大量内存；扩容太慢（比如 1.1 倍）会导致频繁触发扩容操作。</li>
+<li><strong>均摊时间复杂度：</strong> 虽然单次 <code>grow</code> 操作是 <span class="katex--inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><mi>n</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(n)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mord mathnormal" style="margin-right: 0.0278em;">O</span><span class="mopen">(</span><span class="mord mathnormal">n</span><span class="mclose">)</span></span></span></span></span>，但由于它不是每次都触发，均摊到每一次 <code>add</code> 上的时间复杂度依然是 <strong>O(1)</strong>。</li>
+</ul>
+<h3><a id="12___801"></a>1.2  向指定位置添加元素</h3>
+<p>除了 <code>add(E e)</code> 方法，还可以通过 <code>add(int index, E element)</code> 方法把元素添加到 ArrayList 的指定位置：</p>
+<pre><code>alist.add(0, "沉默王三");
+</code></pre>
+<p><code>add(int index, E element)</code> 方法的源码如下：</p>
+<pre><code class="prism language-java"><span class="token comment">/**
+ * 在指定位置插入一个元素。
+ *
+ * @param index   要插入元素的位置
+ * @param element 要插入的元素
+ * @throws IndexOutOfBoundsException 如果索引超出范围，则抛出此异常
+ */</span>
+<span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">add</span><span class="token punctuation">(</span><span class="token keyword">int</span> index<span class="token punctuation">,</span> <span class="token class-name">E</span> element<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token function">rangeCheckForAdd</span><span class="token punctuation">(</span>index<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 检查索引是否越界</span>
+
+    <span class="token function">ensureCapacityInternal</span><span class="token punctuation">(</span>size <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">// 确保容量足够，如果需要扩容就扩容</span>
+    <span class="token class-name">System</span><span class="token punctuation">.</span><span class="token function">arraycopy</span><span class="token punctuation">(</span>elementData<span class="token punctuation">,</span> index<span class="token punctuation">,</span> elementData<span class="token punctuation">,</span> index <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">,</span>
+            size <span class="token operator">-</span> index<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 将 index 及其后面的元素向后移动一位</span>
+    elementData<span class="token punctuation">[</span>index<span class="token punctuation">]</span> <span class="token operator">=</span> element<span class="token punctuation">;</span> <span class="token comment">// 将元素插入到指定位置</span>
+    size<span class="token operator">++</span><span class="token punctuation">;</span> <span class="token comment">// 元素个数加一</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h5><a id="addint_index_E_elementhttpsjavabettercnoonativemethodhtml_Systemarraycopy_834"></a><code>add(int index, E element)</code>方法会调用到一个非常重要的<a href="https://javabetter.cn/oo/native-method.html">本地方法</a> <code>System.arraycopy()</code>，它会对数组进行复制（要插入位置上的元素往后复制）。</h5>
+<ul>
+<li>elementData：表示要复制的源数组，即 ArrayList 中的元素数组。</li>
+<li>index：表示源数组中要复制的起始位置，即需要将 index 及其后面的元素向后移动一位。</li>
+<li>elementData：表示要复制到的目标数组，即 ArrayList 中的元素数组。</li>
+<li>index + 1：表示目标数组中复制的起始位置，即将 index 及其后面的元素向后移动一位后，应该插入到的位置。</li>
+<li>size - index：表示要复制的元素个数，即需要将 index 及其后面的元素向后移动一位，需要移动的元素个数为 size - index。</li>
+</ul>
+<p><img src="https://i-blog.csdnimg.cn/img_convert/922b145db1c98b1d23e4a73b10734202.png" alt="img"></p>
+<h3><a id="13__844"></a>1.3 更新元素</h3>
+<pre><code class="prism language-java">alist<span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token string">"小高"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<pre><code>/**
+ * 用指定元素替换指定位置的元素。
+ *
+ * @param index   要替换的元素的索引
+ * @param element 要存储在指定位置的元素
+ * @return 先前在指定位置的元素
+ * @throws IndexOutOfBoundsException 如果索引超出范围，则抛出此异常
+ */
+public E set(int index, E element) {
+    rangeCheck(index); // 检查索引是否越界
+
+    E oldValue = elementData(index); // 获取原来在指定位置上的元素
+    elementData[index] = element; // 将新元素替换到指定位置上
+    return oldValue; // 返回原来在指定位置上的元素
+}
+</code></pre>
+<h5><a id="set__868"></a><code>set()</code> 方法会先对指定的下标进行检查，看是否越界，然后替换新值并返回旧值。</h5>
+<h3><a id="14__870"></a>1.4 删除元素</h3>
+<h5><a id="removeint_index_removeObject_o__872"></a><code>remove(int index)</code> 方法用于删除指定下标位置上的元素，<code>remove(Object o)</code> 方法用于删除指定值的元素。</h5>
+<pre><code class="prism language-java">alist<span class="token punctuation">.</span><span class="token function">remove</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+alist<span class="token punctuation">.</span><span class="token function">remove</span><span class="token punctuation">(</span><span class="token string">"沉默王四"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<p>先来看 <code>remove(int index)</code> 方法的源码：</p>
+<pre><code>/**
+ * 删除指定位置的元素。
+ *
+ * @param index 要删除的元素的索引
+ * @return 先前在指定位置的元素
+ * @throws IndexOutOfBoundsException 如果索引超出范围，则抛出此异常
+ */
+public E remove(int index) {
+    rangeCheck(index); // 检查索引是否越界
+
+    E oldValue = elementData(index); // 获取要删除的元素
+
+    int numMoved = size - index - 1; // 计算需要移动的元素个数
+    if (numMoved &gt; 0) // 如果需要移动元素，就用 System.arraycopy 方法实现
+        System.arraycopy(elementData, index+1, elementData, index,
+                numMoved);
+    elementData[--size] = null; // 将数组末尾的元素置为 null，让 GC 回收该元素占用的空间
+
+    return oldValue; // 返回被删除的元素
+}
+</code></pre>
+<h5><a id="_Systemarraycopy__null_904"></a>删除元素时，需要将删除位置后面的元素向前移动一位，以填补删除位置留下的空缺。如果需要移动元素，则需要使用 System.arraycopy 方法将删除位置后面的元素向前移动一位。最后，将数组末尾的元素置为 null，以便让垃圾回收机制回收该元素占用的空间。</h5>
+<p>再来看 <code>remove(Object o)</code> 方法的源码：</p>
+<pre><code class="prism language-java"><span class="token comment">/**
+ * 删除列表中第一次出现的指定元素（如果存在）。
+ *
+ * @param o 要删除的元素
+ * @return 如果列表包含指定元素，则返回 true；否则返回 false
+ */</span>
+<span class="token keyword">public</span> <span class="token keyword">boolean</span> <span class="token function">remove</span><span class="token punctuation">(</span><span class="token class-name">Object</span> o<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>o <span class="token operator">==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment">// 如果要删除的元素是 null</span>
+        <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token keyword">int</span> index <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> index <span class="token operator">&lt;</span> size<span class="token punctuation">;</span> index<span class="token operator">++</span><span class="token punctuation">)</span> <span class="token comment">// 遍历列表</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>elementData<span class="token punctuation">[</span>index<span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment">// 如果找到了 null 元素</span>
+                <span class="token function">fastRemove</span><span class="token punctuation">(</span>index<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 调用 fastRemove 方法快速删除元素</span>
+                <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span> <span class="token comment">// 返回 true，表示成功删除元素</span>
+            <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span> <span class="token comment">// 如果要删除的元素不是 null</span>
+        <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token keyword">int</span> index <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> index <span class="token operator">&lt;</span> size<span class="token punctuation">;</span> index<span class="token operator">++</span><span class="token punctuation">)</span> <span class="token comment">// 遍历列表</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>o<span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>elementData<span class="token punctuation">[</span>index<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment">// 如果找到了要删除的元素</span>
+                <span class="token function">fastRemove</span><span class="token punctuation">(</span>index<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 调用 fastRemove 方法快速删除元素</span>
+                <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span> <span class="token comment">// 返回 true，表示成功删除元素</span>
+            <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">return</span> <span class="token boolean">false</span><span class="token punctuation">;</span> <span class="token comment">// 如果找不到要删除的元素，则返回 false</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>该方法通过遍历的方式找到要删除的元素，null 的时候使用 == 操作符判断，非 null 的时候使用 <code>equals()</code> 方法，然后调用 <code>fastRemove()</code> 方法。</p>
+<ul>
+<li>有相同元素时，只会删除第一个。</li>
+<li>判断两个元素是否相等，可以参考<a href="https://javabetter.cn/string/equals.html">Java如何判断两个字符串是否相等</a></li>
+</ul>
+<pre><code>/**
+ * 快速删除指定位置的元素。
+ *
+ * @param index 要删除的元素的索引
+ */
+private void fastRemove(int index) {
+    int numMoved = size - index - 1; // 计算需要移动的元素个数
+    if (numMoved &gt; 0) // 如果需要移动元素，就用 System.arraycopy 方法实现
+        System.arraycopy(elementData, index+1, elementData, index,
+                numMoved);
+    elementData[--size] = null; // 将数组末尾的元素置为 null，让 GC 回收该元素占用的空间
+}
+</code></pre>
+<p>同样是调用 <code>System.arraycopy()</code> 方法对数组进行复制和移动。</p>
+<h3><a id="15__961"></a>1.5 查找元素</h3>
+<h5><a id="_indexOf__lastIndexOf__963"></a>正序查找一个元素，可以使用 <code>indexOf()</code> 方法；如果要倒序查找一个元素，可以使用 <code>lastIndexOf()</code> 方法。</h5>
+<pre><code>alist.indexOf("沉默王二");
+alist.lastIndexOf("沉默王二");
+</code></pre>
+<p><code>indexOf()</code> 方法的源码：</p>
+<pre><code>/**
+ * 返回指定元素在列表中第一次出现的位置。
+ * 如果列表不包含该元素，则返回 -1。
+ *
+ * @param o 要查找的元素
+ * @return 指定元素在列表中第一次出现的位置；如果列表不包含该元素，则返回 -1
+ */
+public int indexOf(Object o) {
+    if (o == null) { // 如果要查找的元素是 null
+        for (int i = 0; i &lt; size; i++) // 遍历列表
+            if (elementData[i]==null) // 如果找到了 null 元素
+                return i; // 返回元素的索引
+    } else { // 如果要查找的元素不是 null
+        for (int i = 0; i &lt; size; i++) // 遍历列表
+            if (o.equals(elementData[i])) // 如果找到了要查找的元素
+                return i; // 返回元素的索引
+    }
+    return -1; // 如果找不到要查找的元素，则返回 -1
+}
+</code></pre>
+<h5><a id="_null__equals__996"></a>如果元素为 null 的时候使用“==”操作符，否则使用 <code>equals()</code> 方法。</h5>
+<p><code>lastIndexOf()</code> 方法和 <code>indexOf()</code> 方法类似，不过遍历的时候从最后开始。</p>
+<h5><a id="contains__ArrayList__indexOf__1000"></a><code>contains()</code> 方法可以判断 ArrayList 中是否包含某个元素，其内部就是通过 <code>indexOf()</code> 方法实现的：</h5>
+<pre><code>public boolean contains(Object o) {
+    return indexOf(o) &gt;= 0;
+}
+</code></pre>
+<h3><a id="16__1008"></a>1.6 二分查找</h3>
+<h5><a id="_ArrayList__1010"></a>如果 ArrayList 中的元素是经过排序的，就可以使用二分查找法，效率更快。</h5>
+<p><a href="https://javabetter.cn/common-tool/collections.html"><code>Collections</code></a> 类的 <code>sort()</code> 方法可以对 ArrayList 进行排序，该方法会按照字母顺序对 String 类型的列表进行排序。如果是自定义类型的列表，还可以指定 Comparator 进行排序。</p>
+<p>这里先简单地了解一下，后面会详细地讲。</p>
+<pre><code>List&lt;String&gt; copy = new ArrayList&lt;&gt;(alist);
+copy.add("a");
+copy.add("c");
+copy.add("b");
+copy.add("d");
+
+Collections.sort(copy);
+</code></pre>
+<h5><a id="int_index__CollectionsbinarySearchcopy_b_1026"></a>int index = Collections.binarySearch(copy, “b”);</h5>
+<h3><a id="17_CRUD_1028"></a>1.7 CRUD的时间复杂度</h3>
+<h4><a id="__O1_1030"></a>查询： 时间复杂度为 O(1)</h4>
+<p>因为 ArrayList 内部使用数组来存储元素，所以可以直接根据索引来访问元素。</p>
+<pre><code>/**
+ * 返回列表中指定位置的元素。
+ *
+ * @param index 要返回的元素的索引
+ * @return 列表中指定位置的元素
+ * @throws IndexOutOfBoundsException 如果索引超出范围（index &lt; 0 || index &gt;= size()）
+ */
+public E get(int index) {
+    rangeCheck(index); // 检查索引是否合法
+    return elementData(index); // 调用 elementData 方法获取元素
+}
+
+/**
+ * 返回列表中指定位置的元素。
+ * 此方法不进行边界检查，因此只应由内部方法和迭代器调用。
+ *
+ * @param index 要返回的元素的索引
+ * @return 列表中指定位置的元素
+ */
+E elementData(int index) {
+    return (E) elementData[index]; // 返回指定索引位置上的元素
+}
+</code></pre>
+<h4><a id="_add__O1_On_1059"></a>插入：调用 <code>add()</code> 方法的时间复杂度最好情况为 O(1)，最坏情况为 O(n)。</h4>
+<ul>
+<li>如果在列表末尾添加元素，时间复杂度为 O(1)。</li>
+<li>如果要在列表的中间或开头插入元素，则需要将插入位置之后的元素全部向后移动一位，时间复杂度为 O(n)。</li>
+</ul>
+<h4><a id="_remoceobject_O1_On_1064"></a>删除： 调用remoce(object)方法的时间复杂度最好情况为 O(1)，最坏情况为 O(n)。</h4>
+<ul>
+<li>如果要删除列表末尾的元素，时间复杂度为 O(1)。</li>
+<li>如果要删除列表中间或开头的元素，则需要将删除位置之后的元素全部向前移动一位，时间复杂度为 O(n)。</li>
+</ul>
+<h4><a id="_set_O1_1069"></a>修改：调用 <code>set()</code>方法与查询操作类似，可以直接根据索引来访问元素，时间复杂度为 O(1)。</h4>
+<h5><a id="_1071"></a>总结：</h5>
+<p>ArrayList，如果有个中文名的话，应该叫<strong>动态数组</strong>，也就是可增长的数组，可调整大小的数组。动态数组克服了静态数组的限制，静态数组的容量是固定的，只能在首次创建的时候指定。而动态数组会随着元素的增加自动调整大小，更符合实际的开发需求。</p>
+<p>学习集合框架，ArrayList 是第一课，也是新手进阶的重要一课。要想完全掌握 ArrayList，扩容这个机制是必须得掌握，也是面试中经常考察的一个点。</p>
+<h2><a id="2_LinkedList_1079"></a>2. LinkedList</h2>
+<ul>
+<li>第一层叫做“单向链表”，我只有一个后指针，指向下一个数据；</li>
+<li>第二层叫做“双向链表”，我有两个指针，后指针指向下一个数据，前指针指向上一个数据。</li>
+<li>第三层叫做“二叉树”，把后指针去掉，换成左右指针。</li>
+</ul>
+<pre><code class="prism language-java"><span class="token comment">/**
+ * 链表中的节点类。
+ */</span>
+<span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">Node</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">E</span><span class="token punctuation">&gt;</span></span> <span class="token punctuation">{</span>
+    <span class="token class-name">E</span> item<span class="token punctuation">;</span> <span class="token comment">// 节点中存储的元素</span>
+    <span class="token class-name">Node</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">E</span><span class="token punctuation">&gt;</span></span> next<span class="token punctuation">;</span> <span class="token comment">// 指向下一个节点的指针</span>
+    <span class="token class-name">Node</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">E</span><span class="token punctuation">&gt;</span></span> prev<span class="token punctuation">;</span> <span class="token comment">// 指向上一个节点的指针</span>
+
+    <span class="token comment">/**
+     * 构造一个新的节点。
+     *
+     * @param prev 前一个节点
+     * @param element 节点中要存储的元素
+     * @param next 后一个节点
+     */</span>
+    <span class="token class-name">Node</span><span class="token punctuation">(</span><span class="token class-name">Node</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">E</span><span class="token punctuation">&gt;</span></span> prev<span class="token punctuation">,</span> <span class="token class-name">E</span> element<span class="token punctuation">,</span> <span class="token class-name">Node</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">E</span><span class="token punctuation">&gt;</span></span> next<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>item <span class="token operator">=</span> element<span class="token punctuation">;</span> <span class="token comment">// 存储元素</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>next <span class="token operator">=</span> next<span class="token punctuation">;</span> <span class="token comment">// 设置下一个节点</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>prev <span class="token operator">=</span> prev<span class="token punctuation">;</span> <span class="token comment">// 设置上一个节点</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>和师兄 ArrayList 一样，我的招式也无外乎“增删改查”这 4 种。在此之前，我们都必须得初始化。</p>
+<pre><code>LinkedList&lt;String&gt; list = new LinkedList();
+</code></pre>
+<p>师兄在初始化的时候可以指定大小，也可以不指定，等到<strong>添加第一个元素的时候进行第一次扩容</strong>。而我，没有大小，只要内存够大，我就可以无穷大</p>
+<h4><a id="1httpsjavabettercncollectionlinkedlisthtml_1_1117"></a><a href="https://javabetter.cn/collection/linkedlist.html#_1-%E6%8B%9B%E5%BC%8F%E4%B8%80-%E5%A2%9E"><strong>1）招式一：增</strong></a></h4>
+<p>可以调用 add 方法添加元素：</p>
+<pre><code>list.add("沉默王二");
+list.add("沉默王三");
+list.add("沉默王四");
+</code></pre>
+<p>add 方法内部其实调用的是 linkLast 方法：</p>
+<pre><code>/**
+ * 将指定的元素添加到列表的尾部。
+ *
+ * @param e 要添加到列表的元素
+ * @return 始终为 true（根据 Java 集合框架规范）
+ */
+public boolean add(E e) {
+    linkLast(e); // 在列表的尾部添加元素
+    return true; // 添加元素成功，返回 true
+}
+</code></pre>
+<p>linkLast，顾名思义，就是在链表的尾部添加元素：</p>
+<pre><code>/**
+ * 在列表的尾部添加指定的元素。
+ *
+ * @param e 要添加到列表的元素
+ */
+void linkLast(E e) {
+    final Node&lt;E&gt; l = last; // 获取链表的最后一个节点
+    final Node&lt;E&gt; newNode = new Node&lt;&gt;(l, e, null); // 创建一个新的节点，并将其设置为链表的最后一个节点
+    last = newNode; // 将新的节点设置为链表的最后一个节点
+    if (l == null) // 如果链表为空，则将新节点设置为头节点
+        first = newNode;
+    else
+        l.next = newNode; // 否则将新节点链接到链表的尾部
+    size++; // 增加链表的元素个数
+}
+</code></pre>
+<ul>
+<li>添加第一个元素的时候，first 和 last 都为 null。</li>
+<li>然后新建一个节点 newNode，它的 prev 和 next 也为 null。</li>
+<li>然后把 last 和 first 都赋值为 newNode。</li>
+</ul>
+<p>此时还不能称之为链表，因为前后节点都是断裂的。</p>
+<p><img src="https://i-blog.csdnimg.cn/img_convert/c41cb6f370de7b5117000acdf727de1a.png" alt="img"></p>
+<ul>
+<li>添加第二个元素的时候，first 和 last 都指向的是第一个节点。</li>
+<li>然后新建一个节点 newNode，它的 prev 指向的是第一个节点，next 为 null。</li>
+<li>然后把第一个节点的 next 赋值为 newNode。</li>
+</ul>
+<h4><a id="2httpsjavabettercncollectionlinkedlisthtml_2_1180"></a><a href="https://javabetter.cn/collection/linkedlist.html#_2-%E6%8B%9B%E5%BC%8F%E4%BA%8C-%E5%88%A0"><strong>2）招式二：删</strong></a></h4>
+<p>我这个删的招式还挺多的：</p>
+<ul>
+<li><code>remove()</code>：删除第一个节点</li>
+<li><code>remove(int)</code>：删除指定位置的节点</li>
+<li><code>remove(Object)</code>：删除指定元素的节点</li>
+<li><code>removeFirst()</code>：删除第一个节点</li>
+<li><code>removeLast()</code>：删除最后一个节点</li>
+</ul>
+<p><code>remove()</code> 内部调用的是 <code>removeFirst()</code>，所以这两个招式的功效一样。</p>
+<p><code>remove(int)</code> 内部其实调用的是 unlink 方法。</p>
+<pre><code>/**
+ * 删除指定位置上的元素。
+ *
+ * @param index 要删除的元素的索引
+ * @return 从列表中删除的元素
+ * @throws IndexOutOfBoundsException 如果索引越界（index &amp;lt; 0 || index &amp;gt;= size()）
+ */
+public E remove(int index) {
+    checkElementIndex(index); // 检查索引是否越界
+    return unlink(node(index)); // 删除指定位置的节点，并返回节点的元素
+}
+</code></pre>
+<p>unlink 方法其实很好理解，就是更新当前节点的 next 和 prev，然后把当前节点上的元素设为 null。</p>
+<pre><code>/**
+ * 从链表中删除指定节点。
+ *
+ * @param x 要删除的节点
+ * @return 从链表中删除的节点的元素
+ */
+E unlink(Node&lt;E&gt; x) {
+    final E element = x.item; // 获取要删除节点的元素
+    final Node&lt;E&gt; next = x.next; // 获取要删除节点的下一个节点
+    final Node&lt;E&gt; prev = x.prev; // 获取要删除节点的上一个节点
+
+    if (prev == null) { // 如果要删除节点是第一个节点
+        first = next; // 将链表的头节点设置为要删除节点的下一个节点
+    } else {
+        prev.next = next; // 将要删除节点的上一个节点指向要删除节点的下一个节点
+        x.prev = null; // 将要删除节点的上一个节点设置为空
+    }
+
+    if (next == null) { // 如果要删除节点是最后一个节点
+        last = prev; // 将链表的尾节点设置为要删除节点的上一个节点
+    } else {
+        next.prev = prev; // 将要删除节点的下一个节点指向要删除节点的上一个节点
+        x.next = null; // 将要删除节点的下一个节点设置为空
+    }
+
+    x.item = null; // 将要删除节点的元素设置为空
+    size--; // 减少链表的元素个数
+    return element; // 返回被删除节点的元素
+}
+</code></pre>
+<p>remove(Object) 内部也调用了 unlink 方法，只不过在此之前要先找到元素所在的节点：</p>
+<h5><a id="_null____null__equals__1248"></a>元素为 null 的时候，必须使用 == 来判断；元素为非 null 的时候，要使用 equals 来判断。</h5>
+<pre><code>/**
+ * 从链表中删除指定元素。
+ *
+ * @param o 要从链表中删除的元素
+ * @return 如果链表包含指定元素，则返回 true；否则返回 false
+ */
+public boolean remove(Object o) {
+    if (o == null) { // 如果要删除的元素为 null
+        for (Node&lt;E&gt; x = first; x != null; x = x.next) { // 遍历链表
+            if (x.item == null) { // 如果节点的元素为 null
+                unlink(x); // 删除节点
+                return true; // 返回 true 表示删除成功
+            }
+        }
+    } else { // 如果要删除的元素不为 null
+        for (Node&lt;E&gt; x = first; x != null; x = x.next) { // 遍历链表
+            if (o.equals(x.item)) { // 如果节点的元素等于要删除的元素
+                unlink(x); // 删除节点
+                return true; // 返回 true 表示删除成功
+            }
+        }
+    }
+    return false; // 如果链表中不包含要删除的元素，则返回 false 表示删除失败
+}
+</code></pre>
+<p>元素为 null 的时候，必须使用 == 来判断；元素为非 null 的时候，要使用 equals 来判断。</p>
+<p>removeFirst 内部调用的是 unlinkFirst 方法：</p>
+<pre><code class="prism language-java"><span class="token comment">/**
+ * 从链表中删除第一个元素并返回它。
+ * 如果链表为空，则抛出 NoSuchElementException 异常。
+ *
+ * @return 从链表中删除的第一个元素
+ * @throws NoSuchElementException 如果链表为空
+ */</span>
+<span class="token keyword">public</span> <span class="token class-name">E</span> <span class="token function">removeFirst</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">final</span> <span class="token class-name">Node</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">E</span><span class="token punctuation">&gt;</span></span> f <span class="token operator">=</span> first<span class="token punctuation">;</span> <span class="token comment">// 获取链表的第一个节点</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>f <span class="token operator">==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token comment">// 如果链表为空</span>
+        <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">NoSuchElementException</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 抛出 NoSuchElementException 异常</span>
+    <span class="token keyword">return</span> <span class="token function">unlinkFirst</span><span class="token punctuation">(</span>f<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 调用 unlinkFirst 方法删除第一个节点并返回它的元素</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>unlinkFirst 负责的就是把第一个节点毁尸灭迹，并且捎带把后一个节点的 prev 设为 null。</p>
+<h4><a id="3httpsjavabettercncollectionlinkedlisthtml_3_1301"></a><a href="https://javabetter.cn/collection/linkedlist.html#_3-%E6%8B%9B%E5%BC%8F%E4%B8%89-%E6%94%B9"><strong>3）招式三：改</strong></a></h4>
+<p>可以调用 <code>set()</code> 方法来更新元素：</p>
+<pre><code>list.set(0, "沉默王五");
+</code></pre>
+<p>来看一下 <code>set()</code> 方法：</p>
+<pre><code>/**
+ * 将链表中指定位置的元素替换为指定元素，并返回原来的元素。
+ *
+ * @param index 要替换元素的位置（从 0 开始）
+ * @param element 要插入的元素
+ * @return 替换前的元素
+ * @throws IndexOutOfBoundsException 如果索引超出范围（index &lt; 0 || index &gt;= size()）
+ */
+public E set(int index, E element) {
+    checkElementIndex(index); // 检查索引是否超出范围
+    Node&lt;E&gt; x = node(index); // 获取要替换的节点
+    E oldVal = x.item; // 获取要替换节点的元素
+    x.item = element; // 将要替换的节点的元素设置为指定元素
+    return oldVal; // 返回替换前的元素
+}
+</code></pre>
+<p>来看一下node方法：</p>
+<pre><code>/**
+ * 获取链表中指定位置的节点。
+ *
+ * @param index 节点的位置（从 0 开始）
+ * @return 指定位置的节点
+ * @throws IndexOutOfBoundsException 如果索引超出范围（index &lt; 0 || index &gt;= size()）
+ */
+Node&lt;E&gt; node(int index) {
+    if (index &lt; (size &gt;&gt; 1)) { // 如果索引在链表的前半部分
+        Node&lt;E&gt; x = first;
+        for (int i = 0; i &lt; index; i++) // 从头节点开始向后遍历链表，直到找到指定位置的节点
+            x = x.next;
+        return x; // 返回指定位置的节点
+    } else { // 如果索引在链表的后半部分
+        Node&lt;E&gt; x = last;
+        for (int i = size - 1; i &gt; index; i--) // 从尾节点开始向前遍历链表，直到找到指定位置的节点
+            x = x.prev;
+        return x; // 返回指定位置的节点
+    }
+}
+</code></pre>
+<p><code>size &gt;&gt; 1</code>：也就是右移一位，相当于除以 2。对于计算机来说，移位比除法运算效率更高，因为数据在计算机内部都是以二进制存储的。</p>
+<p>换句话说，node 方法会对下标进行一个初步判断，如果靠近前半截，就从下标 0 开始遍历；如果靠近后半截，就从末尾开始遍历，这样可以提高效率，最大能提高一半的效率。</p>
+<p>找到指定下标的节点就简单了，直接把原有节点的元素替换成新的节点就 OK 了，prev 和 next 都不用改动。</p>
+<h4><a id="4httpsjavabettercncollectionlinkedlisthtml_4_1366"></a><a href="https://javabetter.cn/collection/linkedlist.html#_4-%E6%8B%9B%E5%BC%8F%E5%9B%9B-%E6%9F%A5"><strong>4）招式四：查</strong></a></h4>
+<p>我这个查的招式可以分为两种：</p>
+<h5><a id="indexOfObject_1370"></a>indexOf(Object)：查找某个元素所在的位置</h5>
+<h5><a id="getint_1372"></a>get(int)：查找某个位置上的元素</h5>
+<p>来看一下 indexOf 方法的源码。</p>
+<pre><code>/**
+ * 返回链表中首次出现指定元素的位置，如果不存在该元素则返回 -1。
+ *
+ * @param o 要查找的元素
+ * @return 首次出现指定元素的位置，如果不存在该元素则返回 -1
+ */
+public int indexOf(Object o) {
+    int index = 0; // 初始化索引为 0
+    if (o == null) { // 如果要查找的元素为 null
+        for (Node&lt;E&gt; x = first; x != null; x = x.next) { // 从头节点开始向后遍历链表
+            if (x.item == null) // 如果找到了要查找的元素
+                return index; // 返回该元素的索引
+            index++; // 索引加 1
+        }
+    } else { // 如果要查找的元素不为 null
+        for (Node&lt;E&gt; x = first; x != null; x = x.next) { // 从头节点开始向后遍历链表
+            if (o.equals(x.item)) // 如果找到了要查找的元素
+                return index; // 返回该元素的索引
+            index++; // 索引加 1
+        }
+    }
+    return -1; // 如果没有找到要查找的元素，则返回 -1
+}
+</code></pre>
+<p>get 方法的内核其实还是 node 方法，node 方法之前已经说明过了，这里略过。</p>
+<pre><code>public E get(int index) {
+    checkElementIndex(index);
+    return node(index).item;
+}
+</code></pre>
+<p>其实，查这个招式还可以演化为其他的一些，比如说：</p>
+<ul>
+<li><code>getFirst()</code> 方法用于获取第一个元素；</li>
+<li><code>getLast()</code> 方法用于获取最后一个元素；</li>
+<li><code>poll()</code> 和 <code>pollFirst()</code> 方法用于删除并返回第一个元素（两个方法尽管名字不同，但方法体是完全相同的）；</li>
+<li><code>pollLast()</code> 方法用于删除并返回最后一个元素；</li>
+<li><code>peekFirst()</code> 方法用于返回但不删除第一个元素。</li>
+</ul>
+<h4><a id="LinkedList_httpsjavabettercncollectionlinkedlisthtml_03linkedlist_1423"></a><a href="https://javabetter.cn/collection/linkedlist.html#_03%E3%80%81linkedlist-%E7%9A%84%E6%8C%91%E6%88%98">LinkedList 的挑战</a></h4>
+<p>说句实在话，我不是很喜欢和师兄 ArrayList 拿来比较，因为我们各自修炼的内功不同，没有孰高孰低。</p>
+<p>虽然师兄经常喊我一声师弟，但我们之间其实挺和谐的。但我知道，在外人眼里，同门师兄弟，总要一较高下的。</p>
+<p>比如说，我们俩在增删改查时候的时间复杂度。</p>
+<p>也许这就是命运吧，从我进入师门的那天起，这种争论就一直没有停息过。</p>
+<p>无论外人怎么看待我们，在我眼里，师兄永远都是一哥，我敬重他，他也愿意保护我。</p>
+<p><a href="https://javabetter.cn/collection/list-war-2.html">好戏在后头</a>，等着瞧吧。</p>
+<p>我这里先简单聊一下，权当抛砖引玉。</p>
+<p>想象一下，你在玩一款游戏，游戏中有一个道具栏，你需要不断地往里面添加、删除道具。如果你使用的是我的师兄 ArrayList，那么每次添加、删除道具时都需要将后面的道具向后移动或向前移动，这样就会非常耗费时间。但是如果你使用的是我 LinkedList，那么只需要将新道具插入到链表中的指定位置，或者将要删除的道具从链表中删除即可，这样就可以快速地完成道具栏的更新。</p>
+<p>除了游戏中的道具栏，我 LinkedList 还可以用于实现 LRU（Least Recently Used）缓存淘汰算法。LRU 缓存淘汰算法是一种常用的缓存淘汰策略，它的基本思想是，当缓存空间不够时，优先淘汰最近最少使用的缓存数据。在实现 LRU 缓存淘汰算法时，你可以使用我 LinkedList 来存储缓存数据，每次访问缓存数据时，将该数据从链表中删除并移动到链表的头部，这样链表的尾部就是最近最少使用的缓存数据，当缓存空间不够时，只需要将链表尾部的缓存数据淘汰即可。</p>
+<p>总之，各有各的好，且行且珍惜。</p>
+<h1><a id="Java_HashMaphash__1451"></a>Java HashMap详解：源码分析、hash 原理、扩容机制、加载因子、线程不安全</h1>
+<h5><a id="_HashMap__O1_1453"></a>用于存储键值对。在 HashMap 中，每个键都映射到一个唯一的值，可以通过键来快速访问对应的值，算法时间复杂度可以达到 O(1)。</h5>
+<p>在实际应用中，HashMap 可以用于<strong>缓存、索引</strong>等场景。例如，可以将用户 ID 作为键，用户信息作为值，将用户信息缓存到 HashMap 中，以便快速查找。又如，可以将关键字作为键，文档 ID 列表作为值，将文档索引缓存到 HashMap 中，以便快速搜索文档。</p>
+<p>实现原理是基于哈希表的，它的底层是一个数组，数组的每个位置可能是一个链表或红黑树，也可能只是一个键值对（后面会讲）。当添加一个键值对时，HashMap 会根据键的哈希值计算出该键对应的数组下标（索引），然后将键值对插入到对应的位置。</p>
+<p>hash 方法的主要作用是将 key 的 hashCode 值进行处理，得到最终的哈希值。由于 key 的 hashCode 值是不确定的，可能会出现哈希冲突，因此需要将哈希值通过一定的算法映射到 HashMap 的实际存储位置上。</p>
+<h2><a id="1_hash_1461"></a>1. hash方法原理</h2>
+<h5><a id="hash__key__hashCode__hashCode__1463"></a>hash 方法的原理是，先获取 key 对象的 hashCode 值，然后将其高位与低位进行异或操作，得到一个新的哈希值。为什么要进行异或操作呢？因为对于 hashCode 的高位和低位，它们的分布是比较均匀的，如果只是简单地将它们加起来或者进行位运算，容易出现哈希冲突，而异或操作可以避免这个问题。</h5>
+<h5><a id="modBucket_HashMap__1465"></a>然后将新的哈希值取模（mod），得到一个实际的存储位置。这个取模操作的目的是将哈希值映射到桶（Bucket）的索引上，桶是 HashMap 中的一个数组，每个桶中会存储着一个链表（或者红黑树），装载哈希值相同的键值对（没有相同哈希值的话就只存储一个键值对）。</h5>
+<h5><a id="HashMap__hash__key__hashCode__HashMap__1467"></a>总的来说，HashMap 的 hash 方法就是将 key 对象的 hashCode 值进行处理，得到最终的哈希值，并通过一定的算法映射到实际的存储位置上。这个过程决定了 HashMap 内部键值对的查找效率。</h5>
+<pre><code class="prism language-java"><span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token keyword">int</span> <span class="token function">hash</span><span class="token punctuation">(</span><span class="token class-name">Object</span> key<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">int</span> h<span class="token punctuation">;</span>
+    <span class="token keyword">return</span> <span class="token punctuation">(</span>key <span class="token operator">==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token operator">?</span> <span class="token number">0</span> <span class="token operator">:</span> <span class="token punctuation">(</span>h <span class="token operator">=</span> key<span class="token punctuation">.</span><span class="token function">hashCode</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">^</span> <span class="token punctuation">(</span>h <span class="token operator">&gt;&gt;&gt;</span> <span class="token number">16</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h2><a id="2__Hashmap_1478"></a>2.  Hashmap扩容机制</h2>
+<h5><a id="_____1480"></a>数组 + 链表 + 红黑树</h5>
+<p>数组一旦初始化后大小就无法改变了，所以就有了 <a href="https://javabebetter.cn/collection/arraylist.html">ArrayList</a>这种“动态数组”，可以自动扩容。</p>
+<p>HashMap 的底层用的也是数组。向 HashMap 里不停地添加元素，当数组无法装载更多元素时，就需要对数组进行扩容，以便装入更多的元素；除此之外，容量的提升也会相应地提高查询效率，因为“桶（坑）”更多了嘛，原来需要通过链表存储的（查询的时候需要遍历），扩容后可能就有自己专属的“坑位”了（直接就能查出来）。</p>
+<p><strong><code>threshold = 容量 capacity × 负载因子 loadFactor</code></strong></p>
+<h3><a id="_HashMap__1488"></a>它是 <strong>HashMap 触发扩容的临界值</strong>：</h3>
+<blockquote>
+<p>当 HashMap 中<strong>存储的键值对数量 size ≥ threshold</strong> 时，就会执行扩容操作。</p>
+</blockquote>
+<pre><code> // 初始化一个新的数组（大容量） 
+
+   Entry[] newTable = new Entry[newCapacity];    
+
+// 把小数组的元素转移到大数组中    
+
+transfer(newTable, initHashSeedAsNeeded(newCapacity));   
+
+ // 引用新的大数组    table = newTable;  
+
+  // 重新计算阈值  
+
+  threshold = (int)Math.min(newCapacity * loadFactor, MAXIMUM_CAPACITY + 1);
+
+
+</code></pre>
+<h3><a id="1__newCapacityhttpsjavabettercncollectionhashmaphtmlnewcapacity_1510"></a>1. <a href="https://javabetter.cn/collection/hashmap.html#%E6%96%B0%E5%AE%B9%E9%87%8F-newcapacity">新容量 newCapacity</a></h3>
+<p>那 newCapacity 是如何计算的呢？</p>
+<pre><code>int newCapacity = oldCapacity * 2;
+if (newCapacity &lt; 0 || newCapacity &gt;= MAXIMUM_CAPACITY) {
+    newCapacity = MAXIMUM_CAPACITY;
+} else if (newCapacity &lt; DEFAULT_INITIAL_CAPACITY) {
+    newCapacity = DEFAULT_INITIAL_CAPACITY;
+}
+</code></pre>
+<p>新容量 newCapacity 被初始化为原容量 oldCapacity 的两倍。然后，如果 newCapacity 超过了 HashMap 的容量限制 MAXIMUM_CAPACITY（2^30），就将 newCapacity 设置为 MAXIMUM_CAPACITY。如果 newCapacity 小于默认初始容量 DEFAULT_INITIAL_CAPACITY（16），就将 newCapacity 设置为 DEFAULT_INITIAL_CAPACITY。这样可以<strong>避免新容量太小或太大导致哈希冲突过多</strong>或者浪费空间。</p>
+<p>Java 8 的时候，newCapacity 的计算方式发生了一些细微的变化。</p>
+<pre><code>int newCapacity = oldCapacity &lt;&lt; 1;
+</code></pre>
+<h3><a id="2_transfer_httpsjavabettercncollectionhashmaphtmltransfer_1533"></a>2. <a href="https://javabetter.cn/collection/hashmap.html#transfer-%E6%96%B9%E6%B3%95">transfer 方法</a></h3>
+<p>该方法用来转移，将旧的小数组元素拷贝到新的大数组中。</p>
+<p>jdk1.7</p>
+<p>首先获取新哈希表（数组）的长度 newCapacity，然后遍历旧哈希表中的每个 Entry。对于每个 Entry，使用拉链法将相同 key 值的不同 value 值存储在同一个链表中。如果 rehash 为 true，则需要重新计算键的哈希值，并将新的哈希值存储在 Entry 的 hash 属性中。</p>
+<p>接着，根据新哈希表的长度和键的哈希值，计算 Entry 在新数组中的位置 i，然后将该 Entry 添加到新数组的 i 位置上。由于新元素需要被放在链表的头部，因此将新元素的下一个元素设置为当前数组位置上的元素。</p>
+<p>遍历完旧哈希表中的所有元素后，转移工作完成，新的哈希表 newTable 已经包含了旧哈希表中的所有元素。</p>
+<h5><a id="indexhash_1545"></a>原来数组中的同一个桶中对应的索引index相同，hash不同。重新计算索引后，如果撞了，就继续拉链；如果不撞，就独自占领新桶。</h5>
+<pre><code class="prism language-java"><span class="token keyword">void</span> <span class="token function">transfer</span><span class="token punctuation">(</span><span class="token class-name">Entry</span><span class="token punctuation">[</span><span class="token punctuation">]</span> newTable<span class="token punctuation">,</span> <span class="token keyword">boolean</span> rehash<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token comment">// 新的容量</span>
+    <span class="token keyword">int</span> newCapacity <span class="token operator">=</span> newTable<span class="token punctuation">.</span>length<span class="token punctuation">;</span>
+    <span class="token comment">// 遍历小数组</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token class-name">Entry</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">K</span><span class="token punctuation">,</span><span class="token class-name">V</span><span class="token punctuation">&gt;</span></span> e <span class="token operator">:</span> table<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token keyword">null</span> <span class="token operator">!=</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment">// 拉链法，相同 key 上的不同值</span>
+            <span class="token class-name">Entry</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">K</span><span class="token punctuation">,</span><span class="token class-name">V</span><span class="token punctuation">&gt;</span></span> next <span class="token operator">=</span> e<span class="token punctuation">.</span>next<span class="token punctuation">;</span>
+            <span class="token comment">// 是否需要重新计算 hash</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>rehash<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                e<span class="token punctuation">.</span>hash <span class="token operator">=</span> <span class="token keyword">null</span> <span class="token operator">==</span> e<span class="token punctuation">.</span>key <span class="token operator">?</span> <span class="token number">0</span> <span class="token operator">:</span> <span class="token function">hash</span><span class="token punctuation">(</span>e<span class="token punctuation">.</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token comment">// 根据大数组的容量，和键的 hash 计算元素在数组中的下标</span>
+            <span class="token keyword">int</span> i <span class="token operator">=</span> <span class="token function">indexFor</span><span class="token punctuation">(</span>e<span class="token punctuation">.</span>hash<span class="token punctuation">,</span> newCapacity<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+            <span class="token comment">// 同一位置上的新元素被放在链表的头部</span>
+            e<span class="token punctuation">.</span>next <span class="token operator">=</span> newTable<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">;</span>
+
+            <span class="token comment">// 放在新的数组上</span>
+            newTable<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">=</span> e<span class="token punctuation">;</span>
+
+            <span class="token comment">// 链表上的下一个元素</span>
+            e <span class="token operator">=</span> next<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><code>e.next = newTable[i]</code>，也就是使用了单链表的头插入方式，同一位置上新元素总会被放在链表的头部位置；这样先放在一个索引上的元素最终会被放到链表的尾部，这就会导致<strong>在旧数组中同一个链表上的元素，通过重新计算索引位置后，有可能被放到了新数组的不同位置上</strong>。</p>
+<h5><a id="17____1578"></a>1.7的扩容： 高并发下 → 产生环形链表，程序死循环；破坏了插入顺序的一致性</h5>
+<h3><a id="18_1580"></a>1.8的扩容及流程：</h3>
+<p><strong>(1)扩容前：数组某下标 <code>j</code> 上挂了一条链表</strong></p>
+<p>​			顺序：<strong>A → B → C → D</strong>（先来 A，然后 B，然后 C，最后 D）</p>
+<p><strong>(2)扩容后数组变大一倍，这条链上的所有人只有两个归宿：</strong></p>
+<ul>
+<li>归宿 1：还留在<strong>原位置 j</strong> → 起名<strong>低位</strong></li>
+<li>归宿 2：去<strong>j + 旧数组长度</strong> 的新位置 → 起名<strong>高位</strong></li>
+<li><strong>判断高低位： if ((e.hash &amp; oldCap</strong>（旧数组容量,二进制只1位是1）) == 0)只看单独某一位二进制位。</li>
+</ul>
+<p><strong>（3）JDK1.8 只干一件事：</strong></p>
+<ul>
+<li>把原来 <strong>A→B→C→D</strong> 这一队人，<strong>分到两个小队</strong>，并且<strong>不打乱原来的先后顺序</strong>。</li>
+</ul>
+<h1><a id="_4__1596"></a>先把代码 4 个变量翻译成大白话</h1>
+<pre><code>Node&lt;K,V&gt; loHead = null, loTail = null;
+Node&lt;K,V&gt; hiHead = null, hiTail = null;
+</code></pre>
+<ul>
+<li><code>loHead</code>：低位小队<strong>第一个人</strong>（队头）</li>
+<li><code>loTail</code>：低位小队<strong>最后一个人</strong>（队尾）</li>
+<li><code>hiHead</code>：高位小队<strong>第一个人</strong></li>
+<li><code>hiTail</code>：高位小队<strong>最后一个人</strong></li>
+</ul>
+<p><strong>尾插法大白话</strong>：</p>
+<p>新人来了，<strong>直接站到队伍最后面</strong>，不插队。</p>
+<p>现在开始挨个遍历节点：A、B、C、D</p>
+<p>原链表顺序：<strong>A → B → C → D</strong></p>
+<h2><a id="_A_1616"></a>第一步：遍历到 A</h2>
+<p>判断：A 属于<strong>低位小队</strong></p>
+<ol>
+<li>
+<p>低位小队现在没人（loTail=null）</p>
+</li>
+<li>
+<p>那 A 既当队长，也是队尾</p>
+<p>低位小队：</p>
+<p>A</p>
+</li>
+</ol>
+<h2><a id="_B_1630"></a>第二步：遍历到 B</h2>
+<p>判断：B 属于<strong>高位小队</strong></p>
+<ol>
+<li>
+<p>高位小队现在没人</p>
+</li>
+<li>
+<p>B 既当队长，也是队尾</p>
+<p>高位小队：</p>
+<p>B</p>
+</li>
+</ol>
+<h2><a id="_C_1644"></a>第三步：遍历到 C</h2>
+<p>判断：C 属于<strong>低位小队</strong></p>
+<ol>
+<li>
+<p>低位小队已有：A</p>
+</li>
+<li>
+<p>把 C <strong>站到队伍最后</strong>（尾插，不插队）</p>
+</li>
+<li>
+<p>现在低位队尾变成 C</p>
+<p>低位小队：</p>
+<p>A → C</p>
+</li>
+</ol>
+<h2><a id="_D_1660"></a>第四步：遍历到 D</h2>
+<p>判断：D 属于<strong>高位小队</strong></p>
+<ol>
+<li>
+<p>高位小队已有：B</p>
+</li>
+<li>
+<p>把 D <strong>站到队伍最后</strong></p>
+</li>
+<li>
+<p>现在高位队尾变成 D</p>
+<p>高位小队：</p>
+<p>B → D</p>
+</li>
+</ol>
+<p>遍历完所有节点，结果出炉</p>
+<ul>
+<li>低位小队：A → C （<strong>保持原来先后顺序</strong>）</li>
+<li>高位小队：B → D （<strong>保持原来先后顺序</strong>）</li>
+</ul>
+<h1><a id="_1679"></a>最后把两个小队挂到新数组</h1>
+<pre><code>// 低位小队留在原位置 j
+newTab[j] = loHead;
+// 高位小队去 j+旧容量 的位置
+newTab[j + oldCap] = hiHead;
+</code></pre>
+<hr>
+<h1><a id="_1690"></a>现在对应到代码核心逻辑（极简对应）</h1>
+<pre><code>if ((e.hash &amp; oldCap) == 0) { 
+    // 归低位小队
+    if (loTail == null) loHead = e; 
+    else loTail.next = e; // 站到队伍最后
+    loTail = e; // 更新队尾
+} else {
+    // 归高位小队，逻辑一模一样
+    if (hiTail == null) hiHead = e;
+    else hiTail.next = e;
+    hiTail = e;
+}
+</code></pre>
+<ul>
+<li><code>loTail.next = e</code> → 让当前节点<strong>接在队伍屁股后面</strong></li>
+<li>这就是<strong>尾插法</strong>：永远排最后，不插队</li>
+<li>不插队 → <strong>原来什么顺序，拆分后还是什么顺序</strong></li>
+</ul>
+<p>当我们往 HashMap 中不断添加元素时，HashMap 会自动进行扩容操作（条件是元素数量达到负载因子（load factor）乘以数组长度时），以保证其存储的元素数量不会超出其容量限制。</p>
+<h5><a id="HashMap__1712"></a>在进行扩容操作时，HashMap 会先将数组的长度扩大一倍，然后将原来的元素重新散列到新的数组中。</h5>
+<h5><a id="_key__hash_hashCode_32__16_hash__jdk18_1714"></a>由于元素的位置是通过 key 的 hash 和数组长度进行与运算得到的，因此在数组长度扩大后，元素的位置也会发生一些改变。一部分索引不变，另一部分索引为“原索引+旧容量”。（将键的<code>hashCode()</code>返回的 32 位哈希值与这个哈希值无符号右移 16 位的结果进行异或。和这个hash方法 + jdk1.8尾插法有关）</h5>
+<p><strong>核心差异</strong>：</p>
+<ul>
+<li>JDK1.7：重新算索引hash() + 头插法 → 顺序颠倒、环形链表；</li>
+<li>JDK1.8：高低位判断 + 尾插法 → 顺序不变、安全高效。</li>
+</ul>
+<h2><a id="jdk18_1721"></a>面试:jdk1.8扩容后还能保证顺序的原因</h2>
+<p>“在 JDK 1.8 中，HashMap 扩容时能保持顺序，主要是因为采用了<strong>尾插法</strong>替代了 1.7 的头插法。</p>
+<p>具体实现上，它通过 <code>e.hash &amp; oldCap</code> 这一位运算，将原有的一个桶位里的链表拆分成‘高位（hi）’和‘低位（lo）’两个子链表。低位链表留在原下标位置，高位链表平移到 <code>原下标 + 旧容量</code> 的位置。</p>
+<p>这种方式不仅保证了扩容后元素的相对顺序不乱，还避免了 1.7 中高并发扩容可能导致的**死循环（环形链表）**问题，同时也由于省去了重新哈希的计算，显著提升了扩容效率。”</p>
+<h3><a id="03_075httpsjavabettercncollectionhashmaphtml_03075_1729"></a><a href="https://javabetter.cn/collection/hashmap.html#_03%E3%80%81%E5%8A%A0%E8%BD%BD%E5%9B%A0%E5%AD%90%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AF-0-75">03、加载因子为什么是 0.75</a></h3>
+<p>上一个问题提到了加载因子（或者叫负载因子），那么这个问题我们来讨论为什么加载因子是 0.75 而不是 0.6、0.8。</p>
+<p>我们知道，HashMap 是用数组+链表/红黑树实现的，我们要想往 HashMap 中添加数据（元素/键值对）或者取数据，就需要确定数据在数组中的下标（索引）。</p>
+<p>先把数据的键进行一次 hash：</p>
+<pre><code>static final int hash(Object key) {
+    int h;
+    return (key == null) ? 0 : (h = key.hashCode()) ^ (h &gt;&gt;&gt; 16);
+}
+</code></pre>
+<p>再做一次取模运算确定下标：</p>
+<pre><code>i = (n - 1) &amp; hash
+</code></pre>
+<p>那这样的过程容易产生两个问题：</p>
+<ul>
+<li>数组的容量过小，经过哈希计算后的下标，容易出现冲突；</li>
+<li>数组的容量过大，导致空间利用率不高。</li>
+</ul>
+<p>加载因子是用来表示 HashMap 中数据的填满程度：</p>
+<blockquote>
+<p>加载因子 = 填入哈希表中的数据个数 / 哈希表的长度</p>
+</blockquote>
+<p>这就意味着：</p>
+<ul>
+<li>
+<p>阈值 = 数组容量 * 加载因子， 阈值越小， size &gt;= 阈值越容易出发扩容机制。</p>
+</li>
+<li>
+<p>加载因子越小，填满的数据就越少，哈希冲突的几率就减少了，但浪费了空间，而且还会提高扩容的触发几率；</p>
+</li>
+<li>
+<p>加载因子越大，填满的数据就越多，空间利用率就高，但哈希冲突的几率就变大了。</p>
+</li>
+</ul>
+<p>Java 8 之前，HashMap 使用链表来解决冲突，即当两个或者多个键映射到同一个桶时，它们被放在同一个桶的链表上。当链表上的节点（Node）过多时，链表会变得很长，查找的效率（<a href="https://javabebetter.cn/collection/linkedlist.html">LinkedList</a> 的查找效率为 O（n））就会受到影响。</p>
+<p>Java 8 中，当链表的节点数超过一个阈值（8）时，链表将转为红黑树（节点为 TreeNode），<strong>红黑树（在讲<a href="https://javabebetter.cn/collection/treemap.html">TreeMap</a>时会细说）是一种高效的平衡树结构，能够在 O(log n) 的时间内完成插入、删除和查找等操作</strong>。这种结构在节点数很多时，可以提高 HashMap 的性能和可伸缩性。</p>
+<h4><a id="httpsjavabettercncollectionhashmaphtml2_1776"></a><a href="https://javabetter.cn/collection/hashmap.html#%E5%B0%8F%E7%BB%93-2">小结</a></h4>
+<p>HashMap 的加载因子（load factor，直译为加载因子，意译为负载因子）是指哈希表中填充元素的个数与桶的数量的比值，当元素个数达到负载因子与桶的数量的乘积时，就需要进行扩容。这个值一般选择 0.75，是因为这个值可以在时间和空间成本之间做到一个折中，使得哈希表的性能达到较好的表现。</p>
+<p>如果负载因子过大，填充因子较多，那么哈希表中的元素就会越来越多地聚集在少数的桶中，这就导致了冲突的增加，这些冲突会导致查找、插入和删除操作的效率下降。同时，这也会导致需要更频繁地进行扩容，进一步降低了性能。</p>
+<p>如果负载因子过小，那么桶的数量会很多，虽然可以减少冲突，但是在空间利用上面也会有浪费，因此选择 0.75 是为了取得一个平衡点，即在时间和空间成本之间取得一个比较好的平衡点。</p>
+<p>总之，选择 0.75 这个值是为了在时间和空间成本之间达到一个较好的平衡点，既可以保证哈希表的性能表现，又能够充分利用空间。</p>
+<h3><a id="04httpsjavabettercncollectionhashmaphtml_04_1786"></a><a href="https://javabetter.cn/collection/hashmap.html#_04%E3%80%81%E7%BA%BF%E7%A8%8B%E4%B8%8D%E5%AE%89%E5%85%A8">04、线程不安全</a></h3>
+<p>三方面原因：</p>
+<ul>
+<li>多线程下扩容会死循环</li>
+<li>多线程下 put 会导致元素丢失</li>
+<li>put 和 get 并发时会导致 get 到 null</li>
+</ul>
+<h4><a id="1httpsjavabettercncollectionhashmaphtml_1_1794"></a><a href="https://javabetter.cn/collection/hashmap.html#_1-%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8B%E6%89%A9%E5%AE%B9%E4%BC%9A%E6%AD%BB%E5%BE%AA%E7%8E%AF">1）多线程下扩容会死循环</a></h4>
+<h5><a id="_1796"></a>线程间，资源是共享的，同步困难。</h5>
+<p>众所周知，HashMap 是通过拉链法来解决哈希冲突的，也就是当哈希冲突时，会将相同哈希值的键值对通过链表的形式存放起来。</p>
+<p>JDK 7 时，采用的是头部插入的方式来存放链表的，也就是下一个冲突的键值对会放在上一个键值对的前面（讲扩容的时候讲过了）。扩容的时候就有可能导致出现环形链表，造成死循环。</p>
+<p>resize 方法的源码：</p>
+<pre><code>// newCapacity为新的容量
+void resize(int newCapacity) {
+    // 小数组，临时过度下
+    Entry[] oldTable = table;
+    // 扩容前的容量
+    int oldCapacity = oldTable.length;
+    // MAXIMUM_CAPACITY 为最大容量，2 的 30 次方 = 1&lt;&lt;30
+    if (oldCapacity == MAXIMUM_CAPACITY) {
+        // 容量调整为 Integer 的最大值 0x7fffffff（十六进制）=2 的 31 次方-1
+        threshold = Integer.MAX_VALUE;
+        return;
+    }
+
+    // 初始化一个新的数组（大容量）
+    Entry[] newTable = new Entry[newCapacity];
+    // 把小数组的元素转移到大数组中
+    transfer(newTable, initHashSeedAsNeeded(newCapacity));
+    // 引用新的大数组
+    table = newTable;
+    // 重新计算阈值
+    threshold = (int)Math.min(newCapacity * loadFactor, MAXIMUM_CAPACITY + 1);
+}
+</code></pre>
+<p>transfer 方法用来转移，将小数组的元素拷贝到新的数组中。</p>
+<pre><code class="prism language-java"><span class="token keyword">void</span> <span class="token function">transfer</span><span class="token punctuation">(</span><span class="token class-name">Entry</span><span class="token punctuation">[</span><span class="token punctuation">]</span> newTable<span class="token punctuation">,</span> <span class="token keyword">boolean</span> rehash<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token comment">// 新的容量</span>
+    <span class="token keyword">int</span> newCapacity <span class="token operator">=</span> newTable<span class="token punctuation">.</span>length<span class="token punctuation">;</span>
+    <span class="token comment">// 遍历小数组</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token class-name">Entry</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">K</span><span class="token punctuation">,</span><span class="token class-name">V</span><span class="token punctuation">&gt;</span></span> e <span class="token operator">:</span> table<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token keyword">null</span> <span class="token operator">!=</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment">// 拉链法，相同 key 上的不同值</span>
+            <span class="token class-name">Entry</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">K</span><span class="token punctuation">,</span><span class="token class-name">V</span><span class="token punctuation">&gt;</span></span> next <span class="token operator">=</span> e<span class="token punctuation">.</span>next<span class="token punctuation">;</span>
+            <span class="token comment">// 是否需要重新计算 hash</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>rehash<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                e<span class="token punctuation">.</span>hash <span class="token operator">=</span> <span class="token keyword">null</span> <span class="token operator">==</span> e<span class="token punctuation">.</span>key <span class="token operator">?</span> <span class="token number">0</span> <span class="token operator">:</span> <span class="token function">hash</span><span class="token punctuation">(</span>e<span class="token punctuation">.</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token comment">// 根据大数组的容量，和键的 hash 计算元素在数组中的下标</span>
+            <span class="token keyword">int</span> i <span class="token operator">=</span> <span class="token function">indexFor</span><span class="token punctuation">(</span>e<span class="token punctuation">.</span>hash<span class="token punctuation">,</span> newCapacity<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+            <span class="token comment">// 同一位置上的新元素被放在链表的头部</span>
+            e<span class="token punctuation">.</span>next <span class="token operator">=</span> newTable<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">;</span>
+
+            <span class="token comment">// 放在新的数组上</span>
+            newTable<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">=</span> e<span class="token punctuation">;</span>
+
+            <span class="token comment">// 链表上的下一个元素</span>
+            e <span class="token operator">=</span> next<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>注意 <code>e.next = newTable[i]</code> 和 <code>newTable[i] = e</code> 这两行代码，它们会将同一位置上的新元素放在链表的头部。</p>
+<p>扩容前的样子假如是下面这样子。</p>
+<p><img src="https://i-blog.csdnimg.cn/img_convert/3af2cdca0646f2819803e304e6c2a75d.png" alt="img"></p>
+<p>那么正常扩容后就是下面这样子。</p>
+<p><img src="https://i-blog.csdnimg.cn/img_convert/55881fdf638b66f6c9907a2ca567d5e9.png" alt="img"></p>
+<p>假设现在有两个线程同时进行扩容，线程 A 在执行到 <code>e.next = newTable[i]</code> 被挂起，此时线程 A 中：e=3、next=7、e.next=null</p>
+<p><img src="https://i-blog.csdnimg.cn/img_convert/dcc8c25720a88933b875e82d6a9e377f.png" alt="img"></p>
+<p>线程 B 开始执行，并且完成了数据转移。</p>
+<p><img src="https://i-blog.csdnimg.cn/img_convert/c39bc175132c97b991bfa8a9dec5a06b.png" alt="img"></p>
+<p>此时，7 的 next 为 3，3 的 next 为 null。</p>
+<p>随后线程 A 获得 CPU 时间片继续执行 <code>e.next = newTable[i];newTable[i] = e</code>，将 3 放入新数组对应的位置，执行完此轮循环后线程 A 的情况如下：</p>
+<p><img src="https://i-blog.csdnimg.cn/img_convert/06db2ee665aaf23f313c39358575f6cf.png" alt="img"></p>
+<p>执行下一轮循环，此时 e=7，原本线程 A 中 7 的 next 为 5，但由于 table 是线程 A 和线程 B 共享的，而线程 B 顺利执行完后，7 的 next 变成了 3，那么此时线程 A 中，7 的 next 也为 3 了。</p>
+<p>采用头部插入的方式，变成了下面这样子：</p>
+<p><img src="https://i-blog.csdnimg.cn/img_convert/de4eb96dc6fed8b31194fda6fa31493d.png" alt="img"></p>
+<p>好像也没什么问题，此时 next = 3，e = 3。</p>
+<p>进行下一轮循环，但此时，由于线程 B 将 3 的 next 变为了 null，所以此轮循环应该是最后一轮了。</p>
+<p>接下来当执行完 <code>e.next=newTable[i]</code> 即 3.next=7 后，3 和 7 之间就相互链接了，执行完 <code>newTable[i]=e</code> 后，3 被头插法重新插入到链表中，执行结果如下图所示：</p>
+<p><img src="https://i-blog.csdnimg.cn/img_convert/8d76080b61ebf95b06015899a328ccae.png" alt="img"></p>
+<p>套娃开始，元素 5 也就成了弃婴，惨~~~</p>
+<p>这里再插入一名球友小灰飞的分析：“线程A是在8行之后、17行之前挂起”。</p>
+<p><img src="https://i-blog.csdnimg.cn/img_convert/6dc58aba2eaa3b55a17008a091a87e68.png" alt="小灰飞">小灰飞</p>
+<p>不过，JDK 8 时已经修复了这个问题，扩容时会保持链表原来的顺序（嗯，等于说了半天白说了，哈哈，这个面试题确实是这样，很水，但有些面试官又确实比较装逼）。</p>
+<h4><a id="2_put_httpsjavabettercncollectionhashmaphtml_2put_1908"></a><a href="https://javabetter.cn/collection/hashmap.html#_2-%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8B-put-%E4%BC%9A%E5%AF%BC%E8%87%B4%E5%85%83%E7%B4%A0%E4%B8%A2%E5%A4%B1">2）多线程下 put 会导致元素丢失</a></h4>
+<p>覆盖了</p>
+<h4><a id="3put__get__get__nullhttpsjavabettercncollectionhashmaphtml_3putgetgetnull_1912"></a><a href="https://javabetter.cn/collection/hashmap.html#_3-put-%E5%92%8C-get-%E5%B9%B6%E5%8F%91%E6%97%B6%E4%BC%9A%E5%AF%BC%E8%87%B4-get-%E5%88%B0-null">3）put 和 get 并发时会导致 get 到 null</a></h4>
+<p>线程 1 执行 put 时，因为元素个数超出阈值而导致出现扩容，线程 2 此时执行 get，就有可能出现这个问题。</p>
+<h4><a id="4httpsjavabettercncollectionhashmaphtml_4_1916"></a><a href="https://javabetter.cn/collection/hashmap.html#_4-%E5%B0%8F%E7%BB%93">4）小结</a></h4>
+<pre><code class="prism language-java"><span class="token keyword">void</span> <span class="token function">resize</span><span class="token punctuation">(</span><span class="token keyword">int</span> newCapacity<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token class-name">Entry</span><span class="token punctuation">[</span><span class="token punctuation">]</span> oldTable <span class="token operator">=</span> table<span class="token punctuation">;</span>
+    <span class="token class-name">Entry</span><span class="token punctuation">[</span><span class="token punctuation">]</span> newTable <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Entry</span><span class="token punctuation">[</span>newCapacity<span class="token punctuation">]</span><span class="token punctuation">;</span> <span class="token comment">// 1. 创建新数组</span>
+    <span class="token function">transfer</span><span class="token punctuation">(</span>newTable<span class="token punctuation">)</span><span class="token punctuation">;</span>                        <span class="token comment">// 2. 搬运数据（耗时操作）</span>
+    table <span class="token operator">=</span> newTable<span class="token punctuation">;</span>                          <span class="token comment">// 3. 将成员变量 table 指向新数组</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><strong>情况 A：数据还没搬完，新表就提前曝光了（指令重排序）</strong></p>
+<p>虽然代码逻辑上是先 <code>transfer</code> 再赋值 <code>table = newTable</code>，但在多线程环境下，编译器或 CPU 可能会为了性能进行<strong>指令重排序</strong>。</p>
+<ul>
+<li><strong>线程 1</strong> 可能先执行了 <code>table = newTable</code>，然后再去执行 <code>transfer</code> 搬数据。</li>
+<li><strong>线程 2</strong> 此时进来 <code>get(A)</code>，它访问的是 <code>table</code> 成员变量。因为它拿到的是<strong>刚初始化完、全是 null 的新数组</strong>，所以无论搜哪个位置，结果都是 <code>null</code>。</li>
+</ul>
+<p><strong>情况 B：槽位被置为 null（这是你疑惑的核心）</strong></p>
+<p>在 <code>transfer</code> 搬运的过程中，JDK 1.7 的代码是这样处理原桶位的：</p>
+<pre><code class="prism language-Java">void transfer(Entry[] newTable) {
+    Entry[] src = table; 
+    for (int j = 0; j &lt; src.length; j++) {
+        Entry&lt;K,V&gt; e = src[j];
+        if (e != null) {
+            src[j] = null; // 【关键点】把旧数组的这个桶位清空了！
+            do {
+                // ... 搬运 A, B, C 到新表 ...
+            } while (e != null);
+        }
+    }
+}
+</code></pre>
+<ol>
+<li><strong>线程 1</strong> 正在搬运 <code>index = 1</code> 位置的链表。它执行了 <code>src[j] = null</code>，也就是把<strong>旧数组</strong>里的引用给断开了，准备把里面的元素一个一个塞到新数组里去。</li>
+<li><strong>线程 2</strong> 此时执行 <code>get(A)</code>。由于线程 1 还没执行完 <code>table = newTable</code>，线程 2 依然在<strong>旧数组</strong>里查找。</li>
+<li><strong>结果</strong>：线程 2 看到 <code>table[1]</code> 已经是 <code>null</code> 了（被线程 1 抹掉的），所以它认为这个 Key 不存在，直接返回 <code>null</code>。</li>
+</ol>
+<p>HashMap 是线程不安全的主要是因为它在进行**插入、删除和扩容等操作时可能会导致链表的结构发生变化，从而破坏了 HashMap 的不变性。**具体来说，如果在一个线程正在遍历 HashMap 的链表时，另外一个线程对该链表进行了修改（比如添加了一个节点），那么就会导致链表的结构发生变化，从而破坏了当前线程正在进行的遍历操作，可能导致遍历失败或者出现死循环等问题。</p>
+<ul>
+<li><strong>旧桶被清空</strong>：扩容过程中，旧桶的元素正在被逐个移动，<code>get</code> 可能访问到已经处理完的空桶。</li>
+<li><strong>可见性问题</strong>：由于没有 <strong>volatile 或锁</strong>的保护，线程 2 可能看到一个极其不稳定的中间状态（比如已经创建但全是 <code>null</code> 的新数组）。</li>
+</ul>
+<h3><a id="_Maphttpsjavabettercncollectiontreemaphtml_04map_1964"></a><a href="https://javabetter.cn/collection/treemap.html#_04%E3%80%81%E5%A6%82%E4%BD%95%E9%80%89%E6%8B%A9-map">如何选择 Map</a></h3>
+<p>在学习 TreeMap 之前，我们已经学习了 <a href="https://javabetter.cn/collection/hashmap.html">HashMap</a> 和 <a href="https://javabetter.cn/collection/linkedhashmap.html">LinkedHashMap</a> ，那如何从它们三个中间选择呢？</p>
+<p>需要考虑以下因素：</p>
+<ul>
+<li>是否需要按照键的自然顺序或者自定义顺序进行排序。如果需要按照键排序，则可以使用 TreeMap；如果不需要排序，则可以使用 HashMap 或 LinkedHashMap。</li>
+<li>是否需要保持插入顺序。如果需要保持插入顺序，则可以使用 LinkedHashMap；如果不需要保持插入顺序，则可以使用 TreeMap 或 HashMap。</li>
+<li>是否需要高效的查找。如果需要高效的查找，则可以使用 LinkedHashMap 或 HashMap，因为它们的查找操作的时间复杂度为 O(1)，而是 TreeMap 是 O(log n)。</li>
+</ul>
+<blockquote>
+<p>LinkedHashMap 内部使用哈希表来存储键值对，并使用一个双向链表来维护插入顺序，但查找操作只需要在哈希表中进行，与链表无关，所以时间复杂度为 O(1)</p>
+</blockquote>
+<p>来个表格吧，一目了然。</p>
+
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>TreeMap</th>
+<th>HashMap</th>
+<th>LinkedHashMap</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>排序</td>
+<td>支持</td>
+<td>不支持</td>
+<td>不支持</td>
+</tr>
+<tr>
+<td>插入顺序</td>
+<td>不保证</td>
+<td>不保证</td>
+<td>保证</td>
+</tr>
+<tr>
+<td>查找效率</td>
+<td>O(log n)</td>
+<td>O(1)</td>
+<td>O(1)</td>
+</tr>
+<tr>
+<td>空间占用</td>
+<td>通常较大</td>
+<td>通常较小</td>
+<td>通常较大</td>
+</tr>
+<tr>
+<td>适用场景</td>
+<td>需要排序的场景</td>
+<td>无需排序的场景</td>
+<td>需要保持插入顺序</td>
+</tr>
+</tbody>
+</table></div>
+</body>
+
+</html>

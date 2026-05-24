@@ -1,0 +1,548 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JVM 垃圾回收器详解：Serial、Parallel、CMS 与 G1 的原理与实践</title>
+  <link rel="stylesheet" href="https://stackedit.io/style.css" />
+</head>
+
+<body class="stackedit">
+  <div class="stackedit__html"><h1><a id="_0"></a>垃圾回收</h1>
+<h2><a id="1__2"></a>1. 如何判断对象可以回收</h2>
+<p>在 JVM 中，堆内存里存放着几乎所有的对象实例。垃圾收集器在对堆进行回收前，第一步就是要确定哪些对象还“活着”，哪些已经“死去”（即不可能再被任何途径使用的对象）。</p>
+<h3><a id="11__Reference_Counting_6"></a>1.1 引用计数法 (Reference Counting)</h3>
+<p><strong>基本原理：</strong></p>
+<p>给对象中添加一个引用计数器：</p>
+<ul>
+<li>每当有一个地方引用它时，计数器值就加 <code>1</code>。</li>
+<li>当引用失效时，计数器值就减 <code>1</code>。</li>
+<li>任何时刻计数器为 <code>0</code> 的对象就是不可能再被使用的。</li>
+</ul>
+<p><strong>致命缺陷：循环引用 (Circular Reference)</strong><img src="https://i-blog.csdnimg.cn/direct/f5586175063049cc8e8fe2335d7e4255.png" alt="在这里插入图片描述"><br>
+这也是主流 JVM（如 HotSpot）<strong>没有</strong>选用引用计数法来管理内存的最主要原因。</p>
+<pre><code class="prism language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">ReferenceCountingGC</span> <span class="token punctuation">{</span>
+    <span class="token keyword">public</span> <span class="token class-name">Object</span> instance <span class="token operator">=</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">testGC</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token class-name">ReferenceCountingGC</span> objA <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ReferenceCountingGC</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">ReferenceCountingGC</span> objB <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ReferenceCountingGC</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        
+        <span class="token comment">// 循环引用</span>
+        objA<span class="token punctuation">.</span>instance <span class="token operator">=</span> objB<span class="token punctuation">;</span>
+        objB<span class="token punctuation">.</span>instance <span class="token operator">=</span> objA<span class="token punctuation">;</span>
+
+        <span class="token comment">// 切断外部引用</span>
+        objA <span class="token operator">=</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+        objB <span class="token operator">=</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 此时 objA 和 objB 的计数器依然为 1，导致无法被回收，造成内存泄漏</span>
+        <span class="token class-name">System</span><span class="token punctuation">.</span><span class="token function">gc</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span> 
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h3><a id="12__Reachability_Analysis_41"></a>1.2 可达性分析算法 (Reachability Analysis)</h3>
+<p>主流商用高性能语言（Java、C#等）都在使用可达性分析算法。</p>
+<p><strong>基本原理：</strong></p>
+<p>通过一系列被称为 <strong>“GC Roots”</strong> 的根对象作为起始节点集，从这些节点开始，<strong>根据引用关系向下搜索</strong>。搜索过程所走过的路径称为<strong>引用链 (Reference Chain)</strong>。</p>
+<p>当一个对象到 GC Roots 没有任何引用链相连（用图论的话来说，就是从 GC Roots 到这个对象不可达）时，则证明此对象是不可能再被使用的，宣告死亡。</p>
+<pre><code>[ GC Roots ]
+     │
+     ▼
+[对象 A] ──► [对象 B]      [对象 C] (不可达，将被回收)
+                             │
+                             ▼
+                           [对象 D]
+</code></pre>
+<h3><a id="_GC_Roots_60"></a>哪些可以作为 GC Roots？</h3>
+<p>在 Java 技术体系中，<strong>固定</strong>可作为 GC Roots 的对象主要包括以下几种：</p>
+<ol>
+<li><strong>虚拟机栈（栈帧中的本地变量表）中引用的对象：</strong> 比如当前正在运行的方法里声明的<strong>局部变量、参数</strong>等。</li>
+<li><strong>方法区中类静态属性引用的对象：</strong> 比如 Java 类的 <code>public static</code> 实例变量。</li>
+<li><strong>方法区中常量引用的对象：</strong> 比如字符串常量池（String Table）里的引用。</li>
+<li><strong>本地方法栈中 JNI（即 Native 方法）引用的对象。</strong></li>
+<li><strong>JVM 内部的引用：</strong> 如基本数据类型对应的 Class 对象，一些常驻的异常对象（如 <code>NullPointerException</code>），系统类加载器等。</li>
+<li><strong>所有被同步锁（<code>synchronized</code> 关键字）持有的对象。</strong></li>
+</ol>
+<h3><a id="13__Reference_71"></a>1.3 四种引用 (Reference)</h3>
+<p>无论是引用计数法还是可达性分析，判断对象是否存活都拆不开“引用”二字。Java 将引用分为 4 种强度，由强到弱依次为：</p>
+
+<table>
+<thead>
+<tr>
+<th><strong>引用类型</strong></th>
+<th><strong>对应 Java 类</strong></th>
+<th><strong>回收时机</strong></th>
+<th><strong>常见应用场景</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>强引用</strong> (Strong)</td>
+<td>普通赋值 <code>Object obj = new Object()</code></td>
+<td><strong>绝对不回收</strong>。宁愿抛出 <code>OutOfMemoryError</code> 导致程序崩溃。     引用断开时才回收 obj == null</td>
+<td>绝大多数日常开发编码。</td>
+</tr>
+<tr>
+<td><strong>软引用</strong> (Soft)</td>
+<td><code>SoftReference</code></td>
+<td><strong>内存不足时</strong>回收。如果回收后内存还不够，才抛 OOM。</td>
+<td>适合做<strong>内存敏感的高速缓存</strong>（如网页缓存、图片缓存）。</td>
+</tr>
+<tr>
+<td><strong>弱引用</strong> (Weak)</td>
+<td><code>WeakReference</code></td>
+<td><strong>垃圾收集时</strong>。只要 GC 发现了弱引用对象，不管内存够不够都回收。</td>
+<td><code>ThreadLocalMap</code> 中的 Key，<code>WeakHashMap</code>。</td>
+</tr>
+<tr>
+<td><strong>虚引用</strong> (Phantom)</td>
+<td><code>PhantomReference</code></td>
+<td><strong>随时可能被回收</strong>。无法通过它访问对象，形同虚设。必须配合<strong>引用队列</strong>使用。</td>
+<td>跟踪对象被垃圾回收的活动，用于管理<strong>堆外内存</strong>（如 DirectByteBuffer直接内存的释放）。</td>
+</tr>
+</tbody>
+</table><blockquote>
+<p>💡 <strong>补充：引用队列 (ReferenceQueue)</strong></p>
+<p>软引用、弱引用都可以选择性地关联一个<strong>引用队列</strong>，而<strong>虚引用必须关联引用队列</strong>。当垃圾回收器准备回收一个对象时，如果发现它还有这些引用，就会在回收对象后，将这个引用加入到与之关联的引用队列中。程序可以通过查看队列来判断相关对象是否已被回收，从而进行后续的资源清理（如释放堆外内存）。 参考：ByteBuffer.allocateDirect的直接内存回收。</p>
+</blockquote>
+<h5><a id="_87"></a>软引用场景</h5>
+<p>假设你在开发一个类似淘宝或者小红书的 App 纯后端/客户端图片微服务，需要缓存用户查看过的商品大图（每张 5MB）。</p>
+<h5><a id="_OOM_91"></a>坏榜样：使用强引用的缓存（导致 OOM）</h5>
+<pre><code class="prism language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">ImageCacheStrong</span> <span class="token punctuation">{</span>
+    <span class="token comment">// 强引用缓存：Key 是图片 URL，Value 是大图对象</span>
+    <span class="token keyword">private</span> <span class="token class-name">Map</span><span class="token operator">&lt;</span><span class="token class-name">String</span><span class="token punctuation">,</span> <span class="token keyword">byte</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">&gt;</span> cache <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashMap</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">byte</span><span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token function">getImage</span><span class="token punctuation">(</span><span class="token class-name">String</span> url<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment">// 1. 先去缓存找</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>cache<span class="token punctuation">.</span><span class="token function">containsKey</span><span class="token punctuation">(</span>url<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span> cache<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>url<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        
+        <span class="token comment">// 2. 没找到，模拟从磁盘/网络加载一张 5MB 的大图</span>
+        <span class="token keyword">byte</span><span class="token punctuation">[</span><span class="token punctuation">]</span> imageData <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token keyword">byte</span><span class="token punctuation">[</span><span class="token number">1024</span> <span class="token operator">*</span> <span class="token number">1024</span> <span class="token operator">*</span> <span class="token number">5</span><span class="token punctuation">]</span><span class="token punctuation">;</span> 
+        
+        <span class="token comment">// 3. 放入缓存</span>
+        cache<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>url<span class="token punctuation">,</span> imageData<span class="token punctuation">)</span><span class="token punctuation">;</span> 
+        <span class="token keyword">return</span> imageData<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h4><a id="__114"></a>💥 强引用带来的灾难：</h4>
+<ol>
+<li>当用户不停地刷页面，看了 1000 张商品图时，<code>cache</code> 就会死死抓着这 1000 个 <code>byte[]</code> 数组不放。</li>
+<li>此时，这些图片占用了 1000 * 5MB= 5GB的内存。</li>
+<li>假设你的 JVM 堆内存一共就配置了 4GB。这时候系统要崩溃了，JVM 紧急启动 Full GC。</li>
+<li>JVM 检查发现：<code>cache</code> 变量还在被运行中的程序持有（它是个强引用），<code>cache</code> 里的 Map 节点也<strong>强引用</strong>着 <code>byte[]</code>。<strong>判定：全部存活，一个都不能回收！</strong></li>
+<li>JVM 无奈，只能抛出 <code>OutOfMemoryError</code>，服务直接宕机。</li>
+</ol>
+<h5><a id="_122"></a>好榜样：使用软引用的缓存（自动伸缩）</h5>
+<p>如果我们改用软引用 <code>SoftReference</code>，情况就会完全不一样：</p>
+<pre><code class="prism language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">ImageCacheSoft</span> <span class="token punctuation">{</span>
+    <span class="token comment">// 软引用缓存：Value 被 SoftReference 包装起来了</span>
+    <span class="token keyword">private</span> <span class="token class-name">Map</span><span class="token operator">&lt;</span><span class="token class-name">String</span><span class="token punctuation">,</span> <span class="token class-name">SoftReference</span><span class="token operator">&lt;</span><span class="token keyword">byte</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">&gt;&gt;</span> cache <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashMap</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">byte</span><span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token function">getImage</span><span class="token punctuation">(</span><span class="token class-name">String</span> url<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment">// 1. 从缓存获取软引用包装</span>
+        <span class="token class-name">SoftReference</span><span class="token operator">&lt;</span><span class="token keyword">byte</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">&gt;</span> softRef <span class="token operator">=</span> cache<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>url<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>softRef <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">byte</span><span class="token punctuation">[</span><span class="token punctuation">]</span> imageData <span class="token operator">=</span> softRef<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 💡 尝试获取真实图片数据</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>imageData <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">return</span> imageData<span class="token punctuation">;</span> <span class="token comment">// 缓存命中！</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+        
+        <span class="token comment">// 2. 缓存没命中（或者由于内存不足被 GC 回收了），重新加载</span>
+        <span class="token keyword">byte</span><span class="token punctuation">[</span><span class="token punctuation">]</span> imageData <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token keyword">byte</span><span class="token punctuation">[</span><span class="token number">1024</span> <span class="token operator">*</span> <span class="token number">1024</span> <span class="token operator">*</span> <span class="token number">5</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+        
+        <span class="token comment">// 3. 用软引用包装后放入缓存</span>
+        cache<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>url<span class="token punctuation">,</span> <span class="token keyword">new</span> <span class="token class-name">SoftReference</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span>imageData<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> imageData<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h4><a id="__152"></a>🛡️ 软引用的救场表现：</h4>
+<ol>
+<li>
+<p>内存充足时，用户怎么刷网页，系统都不会回收这些缓存，读取速度飞快。</p>
+</li>
+<li>
+<p>突然，并发量暴增，系统内存吃紧，堆内存只剩最后 50MB 了，而此时又来了一个需要 20MB 内存的新请求。</p>
+</li>
+<li>
+<p>JVM 发现内存不够用了，立刻触发 GC。</p>
+</li>
+<li>
+<p>JVM 扫描到 <code>cache</code> 里的 <code>SoftReference</code>，发现它们虽然被引用着，但<strong>都是软引用</strong>。</p>
+</li>
+<li>
+<p><strong>JVM 做出决定</strong>：“反正只是缓存，没了还能重新加载，保命要紧！”于是直接把这 5GB byte[]的图片数据全部抹抹干净，内存瞬间释放。</p>
+</li>
+<li>
+<p>系统免于崩溃，新请求顺利通过。后续用户再访问时，虽然由于缓存被清空需要重新去网络加载（稍微慢一点），但<strong>服务始终是活着的</strong>。</p>
+</li>
+</ol>
+<h4><a id="_167"></a>用引用队列优雅地清理残留的软引用外壳</h4>
+<p><em>虽然 5GB 的大数被回收了,但 <code>SoftReference</code> 这个对象本身（约占 24~32 字节）依然死死地躺在代码里的 堆内存Map中。</em></p>
+<pre><code class="prism language-java"><span class="token comment">// 1. 引入引用队列，用来接收“数据已被回收”的软引用外壳</span>
+<span class="token class-name">ReferenceQueue</span><span class="token operator">&lt;</span><span class="token keyword">byte</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">&gt;</span> queue <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ReferenceQueue</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span>
+<span class="token comment">// 2.关联了引用队列， 当软引用所关联的 byte[] 被回收时， 软引用会自动加入引用queue</span>
+<span class="token class-name">SoftReference</span><span class="token operator">&lt;</span><span class="token keyword">byte</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">&gt;</span> ref <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">SoftReference</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token keyword">byte</span><span class="token punctuation">[</span>_4MB<span class="token punctuation">]</span><span class="token punctuation">,</span> queue<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<h2><a id="_178"></a>对象生存还是死亡？（二次标记过程）</h2>
+<p>即使在可达性分析算法中判定为不可达的对象，也不是“非死不可”的。要真正宣告一个对象死亡，至少要经历<strong>两次标记</strong>过程：</p>
+<pre><code>      [ 外部不可达对象 ]
+              │
+              ▼
+       【 第一次标记 】 
+              │
+   是否覆盖 finalize() 且未执行过？
+         ├─── 否 ───► [ 宣告死亡，等待回收 ]
+         │
+         └─── 是
+              │
+              ▼
+   放入 F-Queue 队列，由低优先级线程执行
+              │
+              ▼
+       【 第二次标记 】 
+              │
+    对象是否在 finalize() 中自救？
+         ├─── 是 (重新与引用链建立关联) ───► [ 自救成功，移出回收队列 ]
+         │
+         └─── 否 ─────────────────────────► [ 宣告死亡，等待回收 ]
+</code></pre>
+<blockquote>
+<p><strong>注意：</strong> <code>finalize()</code> 方法的运行代价高昂，不确定性大，无法保证各个对象的调用顺序，<strong>目前已被 Java 官方废弃（Deprecated）</strong>，日常开发中绝不推荐使用。</p>
+</blockquote>
+<h2><a id="2__210"></a>2. 垃圾回收算法</h2>
+<h3><a id="21__212"></a>2.1 标记清除</h3>
+<h5><a id="_214"></a>算法分为“标记”和“清除”两个阶段：</h5>
+<ol>
+<li><strong>标记阶段：</strong> 利用可达性分析算法，从 GC Roots 开始遍历。找出所有存活的对象，并对它们进行<strong>标记</strong>（也可以反过来标记垃圾对象）。</li>
+<li><strong>清除阶段：</strong> 垃圾回收器对堆内存进行线性遍历，发现没有被标记的对象（即垃圾），就将其占用的内存空间<strong>直接释放</strong>。</li>
+</ol>
+<blockquote>
+<p>💡 <strong>底层细节：所谓的“清除”并不是真的擦除</strong> JVM 并不是把这块内存区域的数据全部变成 0，而是把垃圾对象的「起始地址」和「结束地址」记录在一个 <strong>空闲列表（Free List）</strong> 里。下次程序要 new 新对象时，直接去空闲列表里找一块足够大的空间覆盖掉原数据即可。</p>
+</blockquote>
+<h3><a id="__221"></a>💥 致命缺点</h3>
+<p>虽然该算法实现起来最简单，但它有两个致命的缺陷，导致主流垃圾收集器无法单独依靠它来管理整个堆：</p>
+<h4><a id="_1_224"></a>缺点 1：执行效率不稳定（两遍扫描）</h4>
+<ul>
+<li>如果堆中包含大量对象，且其中大部分需要被回收，算法就必须进行大量的标记和清除动作。</li>
+<li><strong>标记</strong>要扫描一遍（从 GC Roots 遍历）；<strong>清除</strong>又要扫描一遍（线性遍历整个堆）。如果对象非常多，执行效率会随着对象数量的增长而降低。</li>
+</ul>
+<h4><a id="_2Memory_Fragmentation_229"></a>缺点 2：内存碎片化问题（Memory Fragmentation）</h4>
+<p>这是最严重的缺点。清除之后，被释放的内存空间是<strong>不连续</strong>的。</p>
+<ul>
+<li>物理内存会变得像“马蜂窝”一样，东一块空闲，西一块空闲。</li>
+<li><strong>后果：</strong> 假设系统剩余的总空闲内存有 10MB，但都是零散的、不连续的小碎片。此时程序突然 new 了一个需要 4MB 连续空间的连续大对象（如大数组），JVM 将<strong>无法找到足够大的连续内存</strong>来分配，从而不得不提前触发另一次 Full GC，甚至直接抛出 <code>OutOfMemoryError</code>。<br>
+<img src="https://i-blog.csdnimg.cn/direct/512397140dba411ebdd1e85778aa378a.png" alt="在这里插入图片描述"></li>
+</ul>
+<h3><a id="22_236"></a>2.2标记整理</h3>
+<p>没有内存碎片， 但涉及到对象移动拷贝，改变对象引用地址等操作，速度慢。</p>
+<h3><a id="23__240"></a>2.3 复制算法</h3>
+<p>它将可用内存按容量划分为<strong>大小相等</strong>的两块：<strong>From 空间</strong> 和 <strong>To 空间</strong>。每次只使用其中的 From 空间</p>
+<p><img src="https://i-blog.csdnimg.cn/direct/4df23a78b5df41c193abc7bab84f6890.png" alt="在这里插入图片描述"><br>
+<strong>绝无内存碎片：</strong> 复制到新空间的对象都是连续排列的，因此分配内存时只需要移动堆顶指针，按顺序分配即可（这种分配方式叫<strong>指针碰撞 Pointer Bump</strong>）。</p>
+<p><strong>垃圾多时效率极高：</strong> 如果内存中绝大多数对象都是垃圾（比如新生代），GC 只需要关注极少数存活的对象，把它们复制过去后，剩下的直接整块抹掉，效率非常快。</p>
+<h3><a id="___250"></a>💥  致命缺点</h3>
+<ul>
+<li><strong>内存利用率极低（浪费一半）：</strong> 这种传统的 1:1 复制算法最大的问题是，你必须时刻保留一半的内存空间（To 空间）用作备用。这意味着可用的最大内存直接<strong>缩水了 50%</strong>，代价过于高昂。</li>
+</ul>
+<h2><a id="3_jvm_254"></a>3. 实际jvm垃圾回收—分代回收</h2>
+<p>在实际的 JVM（如 HotSpot）中，并不会只单独采用某一种回收算法，而是将它们<strong>组合起来</strong>使用，这就是<strong>分代收集算法（Generational Collection）</strong>。</p>
+<h5><a id="_258"></a>它的核心思想是：<strong>根据对象存活周期的不同，将堆内存划分为不同的区域，然后根据每个区域的特点，选用最合适的垃圾回收算法。</strong></h5>
+<p><img src="https://i-blog.csdnimg.cn/direct/a181525e44d8450eb4387799f74793c6.png" alt="在这里插入图片描述"></p>
+
+<table>
+<thead>
+<tr>
+<th><strong>区域</strong></th>
+<th><strong>内存占比</strong></th>
+<th><strong>对象特点</strong></th>
+<th><strong>采用的垃圾回收算法</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>新生代</strong> (Young)</td>
+<td>约占 1/3</td>
+<td><strong>朝生夕死</strong>。绝大多数对象在这里创建，且很快变成垃圾。</td>
+<td><strong>标记-复制算法</strong> (改良后的 8:1:1 模式)</td>
+</tr>
+<tr>
+<td><strong>老年代</strong> (Old)</td>
+<td>约占 2/3</td>
+<td><strong>长命百岁</strong>。大对象、或经历多次 GC 依然存活的顽固对象。</td>
+<td><strong>标记-清除</strong> 或 <strong>标记-整理</strong></td>
+</tr>
+</tbody>
+</table><h3><a id="_266"></a>分代回收的核心工作流程</h3>
+<ol>
+<li>
+<p><strong>新王登基（Eden 区）：</strong> 绝大多数新创建的对象都会首先在 <strong>Eden 区</strong> 分配内存。</p>
+</li>
+<li>
+<p><strong>小范围回收（Minor GC）：</strong> 当 Eden 区满时，会触发 <strong>Minor GC（新生代 GC）</strong>。</p>
+<ul>
+<li>
+<p>Minor GC会引发stop the world, 暂停其他用户线程（很短，大部分是垃圾，复制的很少）。</p>
+</li>
+<li>
+<p>垃圾回收器把 Eden 区域中还活着的对象，一次性复制到 To 区域中。</p>
+</li>
+<li>
+<p>清空 Eden 和 From 区域。</p>
+</li>
+<li>
+<p><strong>对象年龄加 1：</strong> 存活下来的对象，其“分代年龄”会加 1（记录在对象头里）。</p>
+</li>
+<li>
+<p>From 和 To 角色对调。</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>晋升老年代（Promotion）：</strong></p>
+<ul>
+<li><strong>年龄阈值：</strong> 当对象的年龄达到一定程度（默认是 <strong>15 次</strong>，CMS 收集器默认是 6 次），它就会被晋升（Move）到<strong>老年代</strong>。</li>
+<li><strong>大对象直接晋升：</strong> 那些需要大量连续内存空间的极长字符串或大数组，如果新生代放不下，会直接绕过新生代，在老年代分配。</li>
+</ul>
+</li>
+<li>
+<p><strong>终极渡劫（Full GC）：</strong> 当老年代的空间也快满了，或者新生代晋升遇到担保失败时，就会触发 <strong>Full GC</strong>。</p>
+<ul>
+<li>Full GC 会对整个堆内存（包括<strong>新生代、老年代，甚至方法区/元空间</strong>）进行一次彻底的大扫除。</li>
+<li>Full GC 耗时非常长，通常会伴随明显的 <strong>STW（Stop The World，即暂停所有用户线程）</strong>，是系统性能调优的重点攻坚对象。</li>
+</ul>
+</li>
+</ol>
+<h3><a id="GC__291"></a>延伸知识：GC 的分类名词解释</h3>
+<p>在日常开发和面试中，你会听到各种 GC 名词，它们在分代回收里代表不同的回收范围：</p>
+<ul>
+<li><strong>Minor GC / Young GC：</strong> 只是新生代的垃圾收集（Eden, Survivor）。触发非常频繁，回收速度极快。</li>
+<li><strong>Major GC / Old GC：</strong> 只是老年代的垃圾收集。目前<strong>只有 CMS 收集器会有单独收集老年代</strong>的行为。（注意：有时候很多人把 Major GC 和 Full GC 混淆，要看具体语境）。</li>
+<li><strong>Full GC：</strong> 收集<strong>整个 Java 堆和方法区</strong>的垃圾。开销极大，应该尽量避免。</li>
+<li><strong>Mixed GC：</strong> 混合收集。收集整个新生代以及部分老年代的垃圾。这是 <strong>G1 收集器</strong> 特有的行为。</li>
+</ul>
+<h2><a id="4_GC__303"></a>4. GC 调优与排查常用虚拟机参数表</h2>
+<h3><a id="1__305"></a>1. 基础大小控制（上线必配）</h3>
+<p>-Xms2g                         # 堆初始内存 2G<br>
+-Xmx2g                         # 堆最大内存 2G（与初始一致，避免扩容抖动）<br>
+-Xmn512m                       # 新生代大小 512M</p>
+<h3><a id="2_From_311"></a>2. 幸存区From与晋升控制（调优微调）</h3>
+<p>-XX:SurvivorRatio=8            # Eden : From : To = 8 : 1 : 1<br>
+-XX:MaxTenuringThreshold=15    # 对象最多熬过 15 次 GC 必须去老年代</p>
+<h3><a id="3__316"></a>3. 监控与日志排查（排查故障必配）</h3>
+<p>-verbose:gc                    # 开启常规 GC 打印<br>
+-XX:+PrintGCDetails            # 打印详细 GC 日志<br>
+-XX:+PrintTenuringDistribution # 打印每次 GC 后幸存区内对象的年龄分布</p>
+<h3><a id="4__322"></a>4. 保底优化</h3>
+<p>-XX:+ScavengeBeforeFullGC      # 在触发 Full GC 之前先做一次 Minor GC，减轻老年代回收压力</p>
+<h2><a id="5_327"></a>5.垃圾回收器</h2>
+<h3><a id="1_Serial_329"></a>1. 串行收集器（Serial）</h3>
+<p><strong>核心特点</strong>：<strong>单线程</strong>工作。</p>
+<p><strong>工作原理</strong>：当需要垃圾回收时，Java 应用程序的所有用户线程必须全部暂停（Stop The World），然后<strong>只用一个 CPU 核心/一个线程</strong>去清理垃圾。清理完了，用户线程再继续。</p>
+<p><strong>经典组合</strong>：<code>Serial</code>（新生代） + <code>Serial Old</code>（老年代）。</p>
+<p><strong>优缺点</strong>：</p>
+<ul>
+<li><strong>优点</strong>：简单高效。因为<strong>没有多线程交互、上下文切换</strong>的额外开销，在单核 CPU 或微型应用（如几百 MB 内存的客户端程序）中，它的单线程效率反而最高。</li>
+<li><strong>缺点</strong>：如果<strong>堆内存稍大，单线程清理会慢</strong>得令人发指，导致应用卡顿时间（STW）过长。</li>
+</ul>
+<p><strong>适用场景</strong>：目前主要用于桌面应用（Client 模式）、极小内存的嵌入式设备，或者作为其他高级回收器的兜底后备。</p>
+<p><img src="https://i-blog.csdnimg.cn/direct/4fc2c37bb9c04a88926584e1c76a14e2.png" alt="在这里插入图片描述"></p>
+<h3><a id="2_Parallel_347"></a>2. 吞吐量优先（Parallel）</h3>
+<p><strong>核心特点</strong>：<strong>多线程并行、追求总效率</strong>。</p>
+<p><strong>工作原理</strong>：同样会触发完全的 STW（所有用户线程暂停），但它会<strong>榨干所有的 CPU 核心</strong>，开启多个 GC 线程（ParallelGCThreads）一起组队、热火朝天地清理垃圾。</p>
+<p><strong>经典组合</strong>：<code>Parallel Scavenge</code>（新生代） + <code>Parallel Old</code>（老年代）。<strong>这也是 JDK 8 的默认组合。</strong></p>
+<p><strong>理解“吞吐量优先”</strong>：</p>
+<ul>
+<li>它的核心目标是<strong>让 CPU 把尽可能多的时间花在运行业务代码上，而不是花在 GC 上</strong>。</li>
+<li>哪怕单次 GC 停顿需要 200 毫秒，只要它频率低，保证大批量的数据处理、批处理任务在最短时间内跑完就行。</li>
+</ul>
+<p><strong>适用场景</strong>：后台大批数据处理、科学计算、离线报表分析等<strong>不需要跟用户频繁交互、对单次卡顿不敏感，但对计算总量要求极高</strong>的系统。</p>
+
+<table>
+<thead>
+<tr>
+<th>参数写法</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-XX:+UseParallelGC</code></td>
+<td>启用新生代并行回收器</td>
+</tr>
+<tr>
+<td><code>-XX:+UseParallelOldGC</code></td>
+<td>启用老年代并行回收器</td>
+</tr>
+<tr>
+<td><code>-XX:+UseAdaptiveSizePolicy</code></td>
+<td>开启自动内存调整策略</td>
+</tr>
+<tr>
+<td><code>-XX:MaxGCPauseMillis=毫秒</code></td>
+<td>设置最大 GC 停顿时间目标</td>
+</tr>
+<tr>
+<td><code>-XX:GCTimeRatio=数值</code></td>
+<td>设置吞吐量目标，垃圾回收/总时间</td>
+</tr>
+<tr>
+<td><code>-XX:ParallelGCThreads=线程数</code></td>
+<td>设置并行 GC 线程数量</td>
+</tr>
+</tbody>
+</table><p><img src="https://i-blog.csdnimg.cn/direct/c5e0e193a6db4865aa2c3a8ee717d614.png" alt="在这里插入图片描述"></p>
+<h3><a id="3__Concurrent_375"></a>3.  相应时间优先（Concurrent）</h3>
+<p>随着互联网 Web 应用（如电商、社交、微服务）的兴起，用户对网页卡顿越来越不能忍。如果网站因为 GC 突然卡死 1 秒，体验会极差。于是，诞生了不追求绝对吞吐量，而是死磕“<strong>低延迟/短停顿</strong>”的收集器。</p>
+<h3><a id="CMS_Concurrent_Mark_Sweep_379"></a>CMS (Concurrent Mark Sweep)</h3>
+<ul>
+<li><strong>核心思想</strong>：<strong>多线程并发，边跑业务边收垃圾</strong>。它在标记和清理垃圾的很多阶段，是让 GC 线程和用户线程同时运行（Concurrent）的。</li>
+<li><strong>代价</strong>：因为一边跑业务一边收垃圾，CPU 要分心，所以<strong>吞吐量会下降</strong>；而且会产生内存碎片。</li>
+</ul>
+<h3><a id="G1_GarbageFirst__JDK_9__384"></a>G1 (Garbage-First) —— JDK 9 开始的默认王牌</h3>
+<ul>
+<li><strong>核心思想</strong>：不再像以前那样死板地把内存分成连续的新生代和老年代，而是把整个堆内存拆成几千个大小相等的 <strong>小格子（Region）</strong>。</li>
+<li><strong>最大特色</strong>：你可以直接给它下死命令，比如设置 <code>-XX:MaxGCPauseMillis=200</code>（每次卡顿别超过 200ms）。G1 会根据这个目标，<strong>优先回收那些垃圾最多、回收最划算的格子</strong>，在有限的时间内能收多少是多少，把停顿时间死死控住。</li>
+</ul>
+<h3><a id="ZGC_Z_Garbage_Collector___389"></a>ZGC (Z Garbage Collector) —— 新时代的黑科技</h3>
+<ul>
+<li><strong>核心思想</strong>：基本把 STW 停顿时间控制在 <strong>10 毫秒以内</strong>（甚至到微秒级），而且不管你堆内存是 10G 还是 16TB，停顿时间都不变。它几乎把所有清理工作都并发化了。<br>
+<br><br></li>
+</ul>
+<h5><a id="CMS__393"></a>我们先看下CMS的流程, 有一个清晰的认知：</h5>
+
+<table>
+<thead>
+<tr>
+<th>参数写法</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-XX:+UseConcMarkSweepGC</code></td>
+<td>启用 CMS 并发标记清除老年代回收器，主打响应时间优先</td>
+</tr>
+<tr>
+<td><code>-XX:+UseParNewGC</code></td>
+<td>启用新生代 ParNew 并行回收器，配合 CMS 老年代使用</td>
+</tr>
+<tr>
+<td><code>-XX:ParallelGCThreads=n</code></td>
+<td>设置 ParNew 新生代并行回收的线程数</td>
+</tr>
+<tr>
+<td><code>-XX:ConcGCThreads=threads</code></td>
+<td>设置 CMS 并发阶段的 GC 线程数量</td>
+</tr>
+<tr>
+<td><code>-XX:CMSInitiatingOccupancyFraction=percent</code></td>
+<td>设置 CMS 触发 GC 的老年代内存占用百分比阈值</td>
+</tr>
+<tr>
+<td><code>-XX:+CMSScavengeBeforeRemark</code></td>
+<td>在 CMS 重新标记前，先触发一次新生代 GC，减少重新标记耗时</td>
+</tr>
+</tbody>
+</table><p><img src="https://i-blog.csdnimg.cn/direct/84e8a361bafb4721a9bb3ff2b0dd748b.png" alt="在这里插入图片描述"><br>
+🔵 蓝色箭头：<strong>业务代码在正常跑</strong></p>
+<p>🔴 红色箭头：<strong>垃圾回收线程在干活</strong></p>
+<p>⚫ 灰色箭头：<strong>业务代码被卡住暂停</strong>（STW，停顿）</p>
+<p>「安全点」：业务线程必须停下来的时间点</p>
+<ol>
+<li>
+<p><strong>第一步：初始标记（第一次短暂 STW）</strong></p>
+<p>图里：只有 1 个 CPU 跑红色的「初始标记」，其他 CPU 灰色阻塞（业务全停）</p>
+<p>大白话：业务全停，只做一件事 ——<strong>快速标记出 “GC Roots 能直接关联到的对象”</strong>，速度极快，停顿时间非常短。</p>
+</li>
+<li>
+<p><strong>第二步：并发标记（业务完全不卡）</strong></p>
+<p>图里：所有 CPU 的蓝色箭头恢复（业务正常跑），同时 GC 线程在后台跑红色的「并发标记」</p>
+<p><strong>特点：</strong> 占整个 GC 过程中最长的时间，但它是<strong>并发</strong>执行的。也就是说，<strong>垃圾回收线程和业务代码线程同时在跑</strong>（图里 CPU 1 标记，其他 CPU 跑业务）。应用不会卡顿。</p>
+</li>
+<li>
+<p><strong>第三步：重新标记（第二次短暂STW）</strong></p>
+<p>图里：所有 CPU 灰色阻塞（业务又短暂暂停），所有 CPU 跑红色的「重新标记」</p>
+<p>原因：因为并发标记时业务还在跑，可能产生新垃圾，所以这里再短暂停一下，<strong>修正并发标记期间，因用户程序继续运作而导致标记产生变动的那一部分对象</strong>。</p>
+<p><strong>特点：</strong> 会触发 STW，停顿时间比“初始标记”稍长，但远比“并发标记”短。</p>
+</li>
+<li>
+<p><strong>第四步：并发清理（业务完全不卡）</strong></p>
+<p>图里：所有 CPU 蓝色箭头恢复（业务正常跑），GC 线程在后台跑红色的「并发清理」</p>
+<p>大白话：业务继续跑，GC 线程在后台把刚刚标记为垃圾的对象清掉、释放内存，<strong>全程不卡业务</strong>。</p>
+</li>
+</ol>
+<h3><a id="_CMS__G1__448"></a>💥 CMS 被 G1 淘汰的“三大致命硬伤”</h3>
+<h3><a id="1__450"></a>1. 内存碎片问题（致命）</h3>
+<p>CMS 采用的是 <strong>Mark Sweep（标记-清除）</strong> 算法。它只管把死掉的对象抠掉，但<strong>不进行内存整理</strong>。</p>
+<ul>
+<li><strong>后果：</strong> 运行时间长了之后，老年代内存会变得像“马蜂窝”一样千疮百孔（全是碎小的空闲空间）。当程序突然需要分配一个连续的大对象（比如一个大数组）时，明明总空闲内存够，但找不到连续的大空间，就会憋出灾难性的 <strong>Concurrent Mode Failure</strong>，被迫降级触发 <code>Serial Old</code> 进行<strong>单线程 Full GC</strong>，导致系统长时间卡死。</li>
+</ul>
+<h3><a id="2__CPU_456"></a>2. 垃圾回收时极其消耗 CPU</h3>
+<p>因为“并发标记”和“并发清理”阶段是 GC 线程和用户线程抢 CPU 用的。</p>
+<ul>
+<li><strong>后果：</strong> 在核心数较少的机器上，<strong>GC 线程会严重分走业务代码的cpu算力</strong>，导致系统的<strong>吞吐量明显下降</strong>，响应变慢。</li>
+</ul>
+<h3><a id="3_Floating_Garbage_462"></a>3. 浮动垃圾（Floating Garbage）</h3>
+<p>在“并发清理”阶段，保洁阿姨一边扫地，学生一边还在扔纸屑（用户线程还在运行产生新垃圾）。</p>
+<ul>
+<li><strong>后果：</strong> 这一部分新产生的垃圾在当前 GC 周期内是无法被标记并清理的，只能等下一次 GC。这就迫使 CMS 不能等到老年代快满了才触发，必须提前留出富余的空间（也就是配置的 <code>-XX:CMSInitiatingOccupancyFraction</code> 存在的意义）。</li>
+</ul>
+<h2><a id="G1_JDK9_469"></a>G1回收器 （JDK9）</h2>
+<h3><a id="1_Initial_Mark___STW_471"></a>1. 初始标记（Initial Mark） —— <strong>需要 STW</strong></h3>
+<ul>
+<li>
+<p>新生代GC垃圾回收时，进行 GC Roots <strong>初始标记</strong></p>
+</li>
+<li>
+<p><strong>做什么</strong>：标记一下从 GC Roots 能直接关联到的对象，并修改一些指针的值（TAMS）。</p>
+</li>
+<li>
+<p><strong>细节</strong>：在 G1 中，这个阶段不是单独触发的，而是<strong>借用一次年轻代 GC（Minor GC）同步完成的</strong>。所以虽然有 STW，但因为是顺带做的，额外开销极小。</p>
+</li>
+</ul>
+<h3><a id="2_Concurrent_Mark___STW_478"></a>2. 并发标记（Concurrent Mark） —— <strong>不需要 STW</strong></h3>
+<ul>
+<li>
+<p>老年代占用堆空间比例达到阈值，进行 <strong>并发标记</strong></p>
+</li>
+<li>
+<p><strong>做什么</strong>：从 GC Roots 开始对堆中对象进行可 达性分析，找出整个堆的活对象。</p>
+</li>
+<li>
+<p><strong>细节</strong>：和用户线程并发执行。耗时很长，但用户不卡顿。在这个阶段，用户线程改变了对象引用，G1 会使用 <strong>SATB（原始快照）算法</strong>把这些变化记录下来（防止漏标记）。</p>
+</li>
+</ul>
+<h3><a id="3_Final_Mark__Remark___STW_485"></a>3. 最终标记（Final Mark / Remark） —— <strong>需要 STW</strong></h3>
+<ul>
+<li><strong>做什么</strong>：为了修正在并发标记期间，因为用户程序继续运作而导致标记产生变动的那一部分对象。</li>
+<li><strong>细节</strong>：短暂暂停用户线程。G1 在这里<strong>会处理并发标记</strong>阶段产生的 SATB 缓冲区记录，速度很快。</li>
+</ul>
+<h3><a id="4_Live_Data_Counting_and_Evacuation___STW_490"></a>4. 筛选回收（Live Data Counting and Evacuation） —— <strong>需要 STW（关键区别！）</strong></h3>
+<ul>
+<li><strong>做什么</strong>：
+<ol>
+<li>首先，对各个 Region 的<strong>回收价值和成本进行计算和排序</strong>。</li>
+<li>然后，根据开发人员设置的<strong>期望停顿时间</strong>（<code>-XX:MaxGCPauseMillis</code>），来决定这次到底要回收哪些 Region（比如时间只够收 50 个 Region，那就挑<strong>垃圾最多、收益最高</strong>的 50 个收，这就是 <strong>Garbage-First</strong> 名字的由来）。</li>
+<li><strong>最后，把决定要回收的 Region 里的存活对象，复制到空闲的 Region 中，然后彻底清理掉旧 Region</strong>。</li>
+</ol>
+</li>
+<li><strong>与 CMS 的重大区别</strong>：
+<ul>
+<li><strong>CMS 的清理阶段是并发的（不触发 STW）</strong>，但会产生碎片。</li>
+<li><strong>G1 的回收阶段是并行的（触发 STW）</strong>，由多个 GC 线程一起用<strong>复制算法</strong>搬运对象，虽然会卡顿，但彻底干掉了碎片，且因为时间受限，卡顿完全在可控范围内。</li>
+</ul>
+</li>
+</ul>
+</div>
+</body>
+
+</html>
