@@ -205,5 +205,14 @@
     "file": "23-kafka.html",
     "summary": "Kafka 是由 Linkedin 公司开发的，它是一个分布式的，支持多分区、多副本，基于 Zookeeper 的分布式消息流平台，它同时也是一款开源的基于发布订阅模式的消息引擎系统。",
     "size": 47881
+  },
+  {
+    "id": "24-caffeine-redis-cache",
+    "title": "缓存雪崩终极防御：Caffeine + Redis 多级缓存",
+    "category": "Redis",
+    "kind": "html",
+    "file": "24-caffeine-redis-cache.html",
+    "summary": "要深入后端开发和高并发架构，Caffeine 是一个你绝对绕不开的组件。在 Java 领域，它被称为**“缓存之王”**，也是 Spring Boot 官方默认支持和强烈推荐的本地缓存实现（用来全面替代老旧的 Guava Cache 和 Ehcache）。",
+    "size": 47847
   }
 ]
